@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>disable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>dotnet-FlippingExilesPublicStashAPI-e46f705e-3815-40a4-9493-b9d629e6aa88</UserSecretsId>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <ServerGarbageCollection>true</ServerGarbageCollection>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Duende.IdentityModel" Version="7.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.2"/>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
+        <PackageReference Include="StackExchange.Redis" Version="2.8.41" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="..\.dockerignore">
+            <Link>.dockerignore</Link>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Include="obj\Debug\net9.0\.NETCoreApp,Version=v9.0.AssemblyAttributes.cs" />
+    </ItemGroup>
+</Project>
