@@ -7,7 +7,6 @@ public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
     private readonly OAuthTokenClient _oauthClient;
-    
     private readonly RedisMessage _redisMessage;
     
     public Worker(
@@ -26,7 +25,6 @@ public class Worker : BackgroundService
         {
             try
             {
-                
                 // Call the API
                 string apiResponse = await _oauthClient.GetPublicStashesAsync(stoppingToken);
                 _logger.LogInformation("API Response: {Response}", apiResponse);

@@ -16,6 +16,14 @@ builder.Services.AddHttpClient("PathOfExileClient", client =>
     client.DefaultRequestHeaders.Add("User-Agent", "YourAppName/1.0");
 });
 
+builder.Services.AddSingleton<RedisMessage>(sp =>
+{
+    string redisConnectionString = builder.Configuration["RedisConnectionString"];
+    string redisKey = "FlippingExilesPublicStashAPI";
+    var logger = sp.GetRequiredService<ILogger<RedisMessage>>();
+    return new RedisMessage(redisConnectionString,redisKey, logger);
+});
+
 // Register OAuthTokenClient
 builder.Services.AddSingleton<OAuthTokenClient>(sp =>
 {
@@ -26,16 +34,11 @@ builder.Services.AddSingleton<OAuthTokenClient>(sp =>
     string clientId = builder.Configuration["OAuth:ClientId"];
     string clientSecret = builder.Configuration["OAuth:ClientSecret"];
     var logger = sp.GetRequiredService<ILogger<OAuthTokenClient>>();
-    return new OAuthTokenClient(httpClient, tokenUrl, clientId, clientSecret, logger);
+    var redisMessage = sp.GetRequiredService<RedisMessage>();
+    return new OAuthTokenClient(httpClient, tokenUrl, clientId, clientSecret, logger,redisMessage);
 });
 
-builder.Services.AddSingleton<RedisMessage>(sp =>
-{
-    string redisConnectionString = builder.Configuration["RedisConnectionString"];
-    string redisKey = "FlippingExilesPublicStashAPI";
-    var logger = sp.GetRequiredService<ILogger<RedisMessage>>();
-    return new RedisMessage(redisConnectionString,redisKey, logger);
-});
+
 
 // Register the Worker service
 builder.Services.AddHostedService<Worker>();

@@ -2,6 +2,9 @@
 
 using Duende.IdentityModel.Client;
 using FlippingExilesPublicStashAPI.Oauth;
+using FlippingExilesPublicStashAPI.PublicStashPOCO;
+using Microsoft.AspNetCore.WebUtilities;
+using Newtonsoft.Json;
 
 public class OAuthTokenClient
 {
@@ -11,22 +14,27 @@ public class OAuthTokenClient
     private readonly string _clientSecret;
     private readonly ILogger<OAuthTokenClient> _logger;
     private string _accessToken;
-    
+    private readonly RedisMessage _redisMessage;
+    private string changeId;
 
-    public OAuthTokenClient(HttpClient httpClient, string tokenUrl, string clientId, string clientSecret, ILogger<OAuthTokenClient> logger)
+    public OAuthTokenClient(HttpClient httpClient, string tokenUrl, string clientId, string clientSecret, ILogger<OAuthTokenClient> logger,RedisMessage redisMessage)
     {
         _httpClient = httpClient;
         _tokenUrl = tokenUrl;
         _clientId = clientId;
         _clientSecret = clientSecret;
         _logger = logger;
+        _redisMessage = redisMessage;
     }
 
     public async Task<string> GetPublicStashesAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            // Step 1: Get the access token (if not already acquired)
+            changeId = _redisMessage.GetMessage();
+            _logger.LogInformation("changed ID Acquired: "+  changeId);
+
+            
             if (string.IsNullOrEmpty(_accessToken))
             {
                 var tokenResponse = await RequestAccessTokenAsync(cancellationToken);
@@ -34,14 +42,20 @@ public class OAuthTokenClient
                 _logger.LogInformation("Access Token Acquired!");
             }
 
-            // Step 2: Use the access token to call the streaming API
-            string apiUrl = "https://api.pathofexile.com/public-stash-tabs";
-
-            // Create a new HttpRequestMessage to include the Authorization header
-            var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            
+            const string apiUrl = "https://api.pathofexile.com/public-stash-tabs";
+            
+            var parameters = (new Dictionary<string, string>
+            {
+                ["next_change_id"] = changeId
+            }).Where(p => p.Value != null)
+            .ToDictionary(p => p.Key, p => p.Value!);
+            
+            string requestUri = QueryHelpers.AddQueryString(apiUrl, parameters);
+            
+            var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
             request.Headers.Add("User-Agent", "OAuth flippingexiles/1.0 (contact: jackma790@gmail.com)");
-
             // Send the request and get the response as a stream
             var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
@@ -50,13 +64,31 @@ public class OAuthTokenClient
                 // Process the response as a stream
                 using (var stream = await response.Content.ReadAsStreamAsync())
                 using (var reader = new StreamReader(stream))
+                using (var jsonReader = new JsonTextReader(reader))
                 {
-                    string line;
-                    while ((line = await reader.ReadLineAsync()) != null)
+                    var serializer = new JsonSerializer
                     {
-                        // Process each line of the stream
-                        _logger.LogInformation("Received data: {Line}", line);
+                        NullValueHandling = NullValueHandling.Ignore,
+                        MissingMemberHandling = MissingMemberHandling.Ignore
+                    };
+                    var stashResponse = serializer.Deserialize<StashResponse>(jsonReader);
+                    if (stashResponse != null)
+                    {
+                        _redisMessage.SetMessage(stashResponse.NextChangeId);
+                    }
+                    if (stashResponse?.Stashes != null)
+                    {
+                        foreach (var stash in stashResponse.Stashes)
+                        {
+                            if (stash.Items != null)
+                            {
+                                // Example filtering - you can customize this
+                                stash.Items = FilterItems(stash.Items);
                         
+                                // Additional processing
+                                ProcessItems(stash.Items);
+                            }
+                        }
                     }
                 }
 
@@ -85,6 +117,7 @@ public class OAuthTokenClient
         }
     }
 
+
     private async Task<TokenResponse> RequestAccessTokenAsync(CancellationToken cancellationToken = default)
     {
         // Use IdentityModel to request a token
@@ -105,4 +138,16 @@ public class OAuthTokenClient
         _logger.LogInformation("Access token acquired successfully.");
         return tokenResponse;
     }
+    
+    private List<Item> FilterItems(List<Item> stashItems)
+    {
+        throw new NotImplementedException();
+    }
+    
+    
+    private void ProcessItems(List<Item> stashItems)
+    {
+        throw new NotImplementedException();
+    }
+
 }
