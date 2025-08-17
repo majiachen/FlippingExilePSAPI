@@ -3,53 +3,55 @@ using System;
 
 public class RedisMessage : IDisposable
 {
-    private readonly string _redisKey;
     private readonly ConnectionMultiplexer _redisConnection;
     private readonly IDatabase _redisDatabase;
-    private readonly IConfiguration _config;
     private readonly ILogger<RedisMessage> _logger;
 
     
-    public RedisMessage(IConfiguration config)
-    {
-        _config = config;
-    }
-
-    public RedisMessage(string connectionString, string keyName,ILogger<RedisMessage> logger)
+    public RedisMessage(string connectionString, ILogger<RedisMessage> logger)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Redis connection string cannot be empty", nameof(connectionString));
-        
-        if (string.IsNullOrWhiteSpace(keyName))
-            throw new ArgumentException("Key name cannot be empty", nameof(keyName));
 
-        _redisKey = keyName;
         _redisConnection = ConnectionMultiplexer.Connect(connectionString);
         _redisDatabase = _redisConnection.GetDatabase();
-        this._logger = logger;
+        _logger = logger;
     }
 
-    public bool SetMessage(string message, TimeSpan? expiry = null)
+    public bool SetMessage(string keyName, string message, TimeSpan? expiry = null)
     {
+        if (string.IsNullOrWhiteSpace(keyName))
+            throw new ArgumentException("Key name cannot be empty", nameof(keyName));
+            
         if (message == null)
             throw new ArgumentNullException(nameof(message));
-        _logger.LogInformation($"Sending message to redis: {message}");
-        return _redisDatabase.StringSet(_redisKey, message, expiry);
+            
+        _logger?.LogInformation($"Sending message to redis with key '{keyName}': {message}");
+        return _redisDatabase.StringSet(keyName, message, expiry);
     }
 
-    public string GetMessage()
+    public string GetMessage(string keyName)
     {
-        return _redisDatabase.StringGet(_redisKey);
+        if (string.IsNullOrWhiteSpace(keyName))
+            throw new ArgumentException("Key name cannot be empty", nameof(keyName));
+            
+        return _redisDatabase.StringGet(keyName);
     }
 
-    public bool DeleteMessage()
+    public bool DeleteMessage(string keyName)
     {
-        return _redisDatabase.KeyDelete(_redisKey);
+        if (string.IsNullOrWhiteSpace(keyName))
+            throw new ArgumentException("Key name cannot be empty", nameof(keyName));
+            
+        return _redisDatabase.KeyDelete(keyName);
     }
 
-    public bool MessageExists()
+    public bool MessageExists(string keyName)
     {
-        return _redisDatabase.KeyExists(_redisKey);
+        if (string.IsNullOrWhiteSpace(keyName))
+            throw new ArgumentException("Key name cannot be empty", nameof(keyName));
+            
+        return _redisDatabase.KeyExists(keyName);
     }
 
     public void Dispose()

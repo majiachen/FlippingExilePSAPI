@@ -1,8 +1,10 @@
 ﻿
 
 using Duende.IdentityModel.Client;
+using FlippingExilesPublicStashAPI.API;
 using FlippingExilesPublicStashAPI.Oauth;
 using FlippingExilesPublicStashAPI.PublicStashPOCO;
+using FlippingExilesPublicStashAPI.Redis;
 using Microsoft.AspNetCore.WebUtilities;
 using Newtonsoft.Json;
 
@@ -31,7 +33,7 @@ public class OAuthTokenClient
     {
         try
         {
-            changeId = _redisMessage.GetMessage();
+            changeId = _redisMessage.GetMessage(RedisMessageKeyHelper.GetChangeIdDescription());
             _logger.LogInformation("changed ID Acquired: "+  changeId);
 
             
@@ -47,7 +49,7 @@ public class OAuthTokenClient
             
             var parameters = (new Dictionary<string, string>
             {
-                ["next_change_id"] = changeId
+                ["id"] = changeId
             }).Where(p => p.Value != null)
             .ToDictionary(p => p.Key, p => p.Value!);
             
@@ -58,11 +60,12 @@ public class OAuthTokenClient
             request.Headers.Add("User-Agent", "OAuth flippingexiles/1.0 (contact: jackma790@gmail.com)");
             // Send the request and get the response as a stream
             var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
+            
             if (response.IsSuccessStatusCode)
             {
+                UpdateRateLimit(response);
                 // Process the response as a stream
-                using (var stream = await response.Content.ReadAsStreamAsync())
+                using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
                 using (var reader = new StreamReader(stream))
                 using (var jsonReader = new JsonTextReader(reader))
                 {
@@ -74,20 +77,20 @@ public class OAuthTokenClient
                     var stashResponse = serializer.Deserialize<StashResponse>(jsonReader);
                     if (stashResponse != null)
                     {
-                        _redisMessage.SetMessage(stashResponse.NextChangeId);
+                        _logger.LogInformation("changed ID Updated: "+  stashResponse.NextChangeId);
+                        _redisMessage.SetMessage(RedisMessageKeyHelper.GetChangeIdDescription(),stashResponse.NextChangeId);
                     }
-                    if (stashResponse?.Stashes != null)
+
+                    if (stashResponse?.Stashes == null) return "Stream processing completed.";
+                    foreach (var stash in stashResponse.Stashes.Where(stash => stash.Items is { Count: > 0 } && (
+                                 stash.StashType.Contains("Currency")||stash.StashType.Contains("Delve")
+                                 || stash.StashType.Contains("Essence") || stash.StashType.Contains("Blight")
+                                 || stash.StashType.Contains("Delirium")||stash.StashType.Contains("Fragment")
+                                 ||  stash.StashType.Contains("Ultimatum"))))
                     {
-                        foreach (var stash in stashResponse.Stashes)
+                        foreach (var stashItem in stash.Items.Where(item => !string.IsNullOrEmpty(item.Note)))
                         {
-                            if (stash.Items != null)
-                            {
-                                // Example filtering - you can customize this
-                                stash.Items = FilterItems(stash.Items);
-                        
-                                // Additional processing
-                                ProcessItems(stash.Items);
-                            }
+                            _logger.LogInformation("item found with note: " + stashItem +"at stash: "+stash.Id + "with stashtype: "+stash.StashType);
                         }
                     }
                 }
@@ -96,7 +99,7 @@ public class OAuthTokenClient
             }
             else
             {
-                string errorResponse = await response.Content.ReadAsStringAsync();
+                string errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 // Log the error
                 _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
@@ -139,15 +142,33 @@ public class OAuthTokenClient
         return tokenResponse;
     }
     
+    private void UpdateRateLimit(HttpResponseMessage response)
+    {
+        if (response.Headers.TryGetValues("X-Rate-Limit-Ip", out var limitValues))
+        {
+            var limitParts = limitValues.First().Split(',')[^1].Split(':').Select(int.Parse).ToArray();
+            int maxRequests = limitParts[0]; // Max requests
+            int windowSeconds = limitParts[1]; // Time window
+
+            RateLimiter.UpdateRateLimits(maxRequests, windowSeconds);
+            _logger.LogInformation("Rate limits updated: {MaxRequests} requests per {WindowSeconds} seconds", maxRequests, windowSeconds);
+
+        }
+    }
+    
     private List<Item> FilterItems(List<Item> stashItems)
     {
-        throw new NotImplementedException();
+        
+        stashItems.RemoveAll(item => string.IsNullOrEmpty(item.Note));
+        _logger.LogInformation("number of stashes after filterItems: "+stashItems.Count);
+        stashItems.ForEach(item => _logger.LogInformation(item.ToString()));
+        return stashItems;
     }
     
-    
-    private void ProcessItems(List<Item> stashItems)
+    private List<Item> FilterEssenceItems(List<Item> stashItems)
     {
         throw new NotImplementedException();
     }
+    
 
 }

@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text;
+using Newtonsoft.Json;
 
 namespace FlippingExilesPublicStashAPI.PublicStashPOCO;
 
@@ -194,6 +195,86 @@ public class Item
     
     [JsonProperty("artFilename")]
     public string ArtFilename { get; set; }
+    public override string ToString()
+    {
+        var sb = new StringBuilder();
+    
+        // Basic identification
+        if (!string.IsNullOrEmpty(Name))
+        {
+            sb.Append(Name);
+            if (!string.IsNullOrEmpty(BaseType) && Name != BaseType)
+                sb.Append($" ({BaseType})");
+        }
+        else if (!string.IsNullOrEmpty(TypeLine))
+        {
+            sb.Append(TypeLine);
+        }
+        else if (!string.IsNullOrEmpty(BaseType))
+        {
+            sb.Append(BaseType);
+        }
+
+        // Rarity and frame type
+        if (!string.IsNullOrEmpty(Rarity))
+        {
+            sb.Append($" [{Rarity}]");
+        }
+
+        // Item level for non-currency items
+        if (FrameType != 5 && ItemLevel > 0)
+        {
+            sb.Append($" (ilvl {ItemLevel})");
+        }
+
+        // Gem info
+        if (GemLevel.HasValue || GemQuality.HasValue)
+        {
+            sb.Append(" [");
+            if (GemLevel.HasValue) sb.Append($"Lvl {GemLevel.Value}");
+            if (GemQuality.HasValue) sb.Append($" {GemQuality.Value}%");
+            sb.Append("]");
+        }
+
+        // Stack info
+        if (StackSize.HasValue && MaxStackSize.HasValue)
+        {
+            sb.Append($" ({StackSize.Value}/{MaxStackSize.Value})");
+        }
+        else if (StackSize.HasValue)
+        {
+            sb.Append($" ({StackSize.Value})");
+        }
+
+        // Special flags
+        var specialFlags = new List<string>();
+        if (Corrupted == true) specialFlags.Add("Corrupted");
+        if (Verified) specialFlags.Add("Verified");
+        if (Identified) specialFlags.Add("Identified");
+        if (IsSupportGem == true) specialFlags.Add("Support");
+        if (Duplicated == true) specialFlags.Add("Mirrored");
+    
+        if (specialFlags.Count > 0)
+        {
+            sb.Append(" [");
+            sb.Append(string.Join(", ", specialFlags));
+            sb.Append("]");
+        }
+
+        // Note
+        if (!string.IsNullOrEmpty(Note))
+        {
+            sb.Append($" » {Note}");
+        }
+
+        // Position info
+        if (!string.IsNullOrEmpty(InventoryId))
+        {
+            sb.Append($" @ {InventoryId}({XPosition},{YPosition})");
+        }
+
+        return sb.ToString();
+    }
 }
 
 public class Socket

@@ -3,10 +3,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using FlippingExilesPublicStashAPI;
+using FlippingExilesPublicStashAPI.API;
 using StackExchange.Redis;
 
 var builder = Host.CreateApplicationBuilder(args);
-var RedisConnectionString = builder.Configuration["RedisConnectionString"];
 // Add logging configuration
 builder.Logging.AddConsole(); // Add console logging (or any other logging provider)
 
@@ -21,7 +21,7 @@ builder.Services.AddSingleton<RedisMessage>(sp =>
     string redisConnectionString = builder.Configuration["RedisConnectionString"];
     string redisKey = "FlippingExilesPublicStashAPI";
     var logger = sp.GetRequiredService<ILogger<RedisMessage>>();
-    return new RedisMessage(redisConnectionString,redisKey, logger);
+    return new RedisMessage(redisConnectionString, logger);
 });
 
 // Register OAuthTokenClient
@@ -38,7 +38,11 @@ builder.Services.AddSingleton<OAuthTokenClient>(sp =>
     return new OAuthTokenClient(httpClient, tokenUrl, clientId, clientSecret, logger,redisMessage);
 });
 
-
+builder.Services.AddSingleton<RateLimiter>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<RateLimiter>>();
+    return new RateLimiter(logger);
+});
 
 // Register the Worker service
 builder.Services.AddHostedService<Worker>();

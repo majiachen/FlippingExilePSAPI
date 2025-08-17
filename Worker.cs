@@ -1,5 +1,7 @@
 
+using FlippingExilesPublicStashAPI.API;
 using FlippingExilesPublicStashAPI.Oauth;
+using FlippingExilesPublicStashAPI.Redis;
 
 namespace FlippingExilesPublicStashAPI;
 
@@ -8,26 +10,31 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly OAuthTokenClient _oauthClient;
     private readonly RedisMessage _redisMessage;
+    private readonly RateLimiter _rateLimiter;
+    
     
     public Worker(
         ILogger<Worker> logger,
-        OAuthTokenClient oauthClient,RedisMessage redisMessage)
+        OAuthTokenClient oauthClient,
+        RedisMessage redisMessage,
+        RateLimiter rateLimiter)
     {
         _logger = logger;
         _oauthClient = oauthClient;
         _redisMessage = redisMessage;
+        _rateLimiter = rateLimiter;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _redisMessage.SetMessage("test");
+        _redisMessage.SetMessage(RedisMessageKeyHelper.GetTestDescription(),"test");
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                await RateLimiter.WaitAsync(stoppingToken);
                 // Call the API
                 string apiResponse = await _oauthClient.GetPublicStashesAsync(stoppingToken);
-                _logger.LogInformation("API Response: {Response}", apiResponse);
             }
             catch (ApiException ex)
             {
@@ -37,9 +44,6 @@ public class Worker : BackgroundService
             {
                 _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
             }
-
-            // Wait for a period before running again (e.g., 5 minutes)
-            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
         }
     }
 }
