@@ -24,6 +24,13 @@ builder.Services.AddSingleton<RedisMessage>(sp =>
     return new RedisMessage(redisConnectionString, logger);
 });
 
+// Register ItemFilter
+builder.Services.AddSingleton<ItemFilter>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ItemFilter>>();
+    return new ItemFilter(logger);
+});
+
 // Register OAuthTokenClient
 builder.Services.AddSingleton<OAuthTokenClient>(sp =>
 {
@@ -35,7 +42,9 @@ builder.Services.AddSingleton<OAuthTokenClient>(sp =>
     string clientSecret = builder.Configuration["OAuth:ClientSecret"];
     var logger = sp.GetRequiredService<ILogger<OAuthTokenClient>>();
     var redisMessage = sp.GetRequiredService<RedisMessage>();
-    return new OAuthTokenClient(httpClient, tokenUrl, clientId, clientSecret, logger,redisMessage);
+    var itemFilter = sp.GetRequiredService<ItemFilter>();
+    
+    return new OAuthTokenClient(httpClient, tokenUrl, clientId, clientSecret, logger, redisMessage, itemFilter);
 });
 
 builder.Services.AddSingleton<RateLimiter>(sp =>

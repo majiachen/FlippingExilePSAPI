@@ -1,4 +1,7 @@
 ﻿// ReSharper disable IdentifierTypo
+
+using FlippingExilesPublicStashAPI.PublicStashPOCO;
+
 namespace FlippingExilesPublicStashAPI.Redis;
 using System.ComponentModel;
 using System.Reflection;

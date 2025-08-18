@@ -18,8 +18,10 @@ public class OAuthTokenClient
     private string _accessToken;
     private readonly RedisMessage _redisMessage;
     private string changeId;
+    private readonly ItemFilter _itemFilter;
 
-    public OAuthTokenClient(HttpClient httpClient, string tokenUrl, string clientId, string clientSecret, ILogger<OAuthTokenClient> logger,RedisMessage redisMessage)
+
+    public OAuthTokenClient(HttpClient httpClient, string tokenUrl, string clientId, string clientSecret, ILogger<OAuthTokenClient> logger, RedisMessage redisMessage, ItemFilter itemFilter)
     {
         _httpClient = httpClient;
         _tokenUrl = tokenUrl;
@@ -27,7 +29,9 @@ public class OAuthTokenClient
         _clientSecret = clientSecret;
         _logger = logger;
         _redisMessage = redisMessage;
+        _itemFilter = itemFilter;
     }
+
 
     public async Task<string> GetPublicStashesAsync(CancellationToken cancellationToken = default)
     {
@@ -82,17 +86,10 @@ public class OAuthTokenClient
                     }
 
                     if (stashResponse?.Stashes == null) return "Stream processing completed.";
-                    foreach (var stash in stashResponse.Stashes.Where(stash => stash.Items is { Count: > 0 } && (
-                                 stash.StashType.Contains("Currency")||stash.StashType.Contains("Delve")
-                                 || stash.StashType.Contains("Essence") || stash.StashType.Contains("Blight")
-                                 || stash.StashType.Contains("Delirium")||stash.StashType.Contains("Fragment")
-                                 ||  stash.StashType.Contains("Ultimatum"))))
-                    {
-                        foreach (var stashItem in stash.Items.Where(item => !string.IsNullOrEmpty(item.Note)))
-                        {
-                            _logger.LogInformation("item found with note: " + stashItem +"at stash: "+stash.Id + "with stashtype: "+stash.StashType);
-                        }
-                    }
+            
+                    var filteredStashes = _itemFilter.FilterStashes(stashResponse.Stashes);
+                    _itemFilter.ProcessFilteredStashes(filteredStashes, _logger);
+
                 }
 
                 return "Stream processing completed.";
