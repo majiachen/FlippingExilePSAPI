@@ -10,4 +10,12 @@ public static class EnumExtensions
         var attributes = (DescriptionAttribute[])fieldInfo.GetCustomAttributes(typeof(DescriptionAttribute), false);
         return attributes.Length > 0 ? attributes[0].Description : value.ToString();
     }
+    
+    public static List<string> GetAllDescriptions<T>() where T : Enum
+    {
+        return Enum.GetValues(typeof(T))
+            .Cast<T>()
+            .Select(v => GetDescription(v))
+            .ToList();
+    }
 }

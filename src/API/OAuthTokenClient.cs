@@ -87,8 +87,7 @@ public class OAuthTokenClient
 
                     if (stashResponse?.Stashes == null) return "Stream processing completed.";
             
-                    var filteredStashes = _itemFilter.FilterStashes(stashResponse.Stashes);
-                    _itemFilter.ProcessFilteredStashes(filteredStashes, _logger);
+                    _itemFilter.FilterStashes(stashResponse.Stashes);
 
                 }
 
