@@ -43,16 +43,17 @@ public enum RedisMessageKeyEnum
 public static class RedisMessageKeyHelper
 {
     
-    public static string GetTestDescription() => GetDescription(RedisMessageKeyEnum.Test);
-    public static string GetEssenceTradeListDescription() => GetDescription(RedisMessageKeyEnum.EssenceTradeList);
-    public static string GetFossilTradeListDescription() => GetDescription(RedisMessageKeyEnum.FossilTradeList);
-    public static string GetCatalystsTradeListDescription() => GetDescription(RedisMessageKeyEnum.CatalystsTradeList);
-    public static string GetOilsTradeListDescription() => GetDescription(RedisMessageKeyEnum.OilsTradeList);
-    public static string GetDeliriumOrbsTradeListDescription() => GetDescription(RedisMessageKeyEnum.DeliriumOrbsTradeList);
-    public static string GetBreachstonesTradeListDescription() => GetDescription(RedisMessageKeyEnum.BreachstonesTradeList);
-    public static string GetEmblemsTradeListDescription() => GetDescription(RedisMessageKeyEnum.EmblemsTradeList);
-    public static string GetChangeIdDescription() => GetDescription(RedisMessageKeyEnum.ChangeId);
-    public static string GetLeagueNameDescription() => GetDescription(RedisMessageKeyEnum.LeagueName);
+    public static string GetTestRedisKey() => GetDescription(RedisMessageKeyEnum.Test);
+    public static string GetEssenceTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.EssenceTradeList);
+    public static string GetFossilTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.FossilTradeList);
+    public static string GetCatalystsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.CatalystsTradeList);
+    public static string GetOilsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.OilsTradeList);
+    public static string GetDeliriumOrbsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.DeliriumOrbsTradeList);
+    public static string GetBreachstonesTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.BreachstonesTradeList);
+    public static string GetEmblemsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.EmblemsTradeList);
+    public static string GetChangeIdRedisKey() => GetDescription(RedisMessageKeyEnum.ChangeId);
+    public static string GetLeagueNameRedisKey() => GetDescription(RedisMessageKeyEnum.LeagueName);
+
     
 
     private static string GetDescription(RedisMessageKeyEnum key)

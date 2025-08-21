@@ -37,7 +37,7 @@ public class OAuthTokenClient
     {
         try
         {
-            changeId = _redisMessage.GetMessage(RedisMessageKeyHelper.GetChangeIdDescription());
+            changeId = _redisMessage.GetMessage(RedisMessageKeyHelper.GetChangeIdRedisKey());
             _logger.LogInformation("changed ID Acquired: "+  changeId);
 
             
@@ -82,7 +82,7 @@ public class OAuthTokenClient
                     if (stashResponse != null)
                     {
                         _logger.LogInformation("changed ID Updated: "+  stashResponse.NextChangeId);
-                        _redisMessage.SetMessage(RedisMessageKeyHelper.GetChangeIdDescription(),stashResponse.NextChangeId);
+                        _redisMessage.SetMessage(RedisMessageKeyHelper.GetChangeIdRedisKey(),stashResponse.NextChangeId);
                     }
 
                     if (stashResponse?.Stashes == null) return "Stream processing completed.";

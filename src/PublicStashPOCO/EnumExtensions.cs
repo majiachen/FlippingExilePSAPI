@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Reflection;
 
 namespace FlippingExilesPublicStashAPI.PublicStashPOCO;
 
@@ -17,5 +18,17 @@ public static class EnumExtensions
             .Cast<T>()
             .Select(v => GetDescription(v))
             .ToList();
+    }
+    
+    public static T GetValueByDescription<T>(string description) where T : Enum
+    {
+        foreach (T value in Enum.GetValues(typeof(T)))
+        {
+            if (value.GetDescription() == description)
+            {
+                return value;
+            }
+        }
+        throw new ArgumentException($"No enum value of type {typeof(T).Name} found with description '{description}'");
     }
 }
