@@ -1,14 +1,20 @@
-﻿namespace FlippingExilesPublicStashAPI.PublicStashPOCO;
+﻿using Newtonsoft.Json;
+
+namespace FlippingExilesPublicStashAPI.PublicStashPOCO;
 
 public class AccountAndStashMap
 {
-    public String accountName;
-    public List<Stash> Stashes;
+    [JsonProperty("accountName")]
+    public string AccountName { get; set; }
+    
+    [JsonProperty("stashId")]
+    public string StashId { get; set; }
+    
+    [JsonProperty("item")]
+    public List<Item> Item { get; set; }
     
     public override string ToString()
     {
-        var stashIds = Stashes?.Select(s => s.Id).ToList() ?? new List<string>();
-        return $"Account: {accountName}, Stash IDs: [{string.Join(", ", stashIds)}]";
+        return $"accountName: {AccountName}, Stash ID: {StashId}, Item: {Item}";
     }
-
 }

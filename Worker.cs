@@ -27,7 +27,7 @@ public class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _redisMessage.SetMessage(RedisMessageKeyHelper.GetTestDescription(),"test");
+        _redisMessage.SetMessage(RedisMessageKeyHelper.GetTestRedisKey(),"test");
         while (!stoppingToken.IsCancellationRequested)
         {
             try

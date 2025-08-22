@@ -1,10 +1,19 @@
 ﻿using System.ComponentModel;
 using System.Reflection;
+using FlippingExilesPublicStashAPI.LeaguePOCO;
+using FlippingExilesPublicStashAPI.Redis;
 
 namespace FlippingExilesPublicStashAPI.PublicStashPOCO;
 
 public static class EnumExtensions
 {
+    
+    public static IEnumerable<Enum> EssenceEnumsList => Enum.GetValues(typeof(EssenceEnum)).Cast<Enum>();
+
+    public static IEnumerable<Enum> FossilEnumsList => Enum.GetValues(typeof(FossilEnum)).Cast<Enum>();
+
+    public static readonly CurrencySuffixEnum[] CurrencySuffixEnumsList = (CurrencySuffixEnum[])Enum.GetValues(typeof(CurrencySuffixEnum));
+
     public static string GetDescription(this Enum value)
     {
         var fieldInfo = value.GetType().GetField(value.ToString());

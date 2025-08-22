@@ -32,10 +32,13 @@ public enum RedisMessageKeyEnum
     [Description("FlippingExilesPublicStashAPI.EmblemsTradeList")]
     EmblemsTradeList,
     
+    [Description("FlippingExilesPublicStashAPI.UnkownTradeList")]
+    UnkownTradeList,
+    
     [Description("FlippingExilesPublicStashAPI.ChangeId")]
     ChangeId,
 
-    [Description("FlippingExilesPublicStashAPI.LeagueName")]
+    [Description("FlippingExilesPublicStashAPI.LeagueNames")]
     LeagueName,
     
 }
@@ -51,6 +54,8 @@ public static class RedisMessageKeyHelper
     public static string GetDeliriumOrbsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.DeliriumOrbsTradeList);
     public static string GetBreachstonesTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.BreachstonesTradeList);
     public static string GetEmblemsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.EmblemsTradeList);
+    public static string GetUnkownTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.UnkownTradeList);
+
     public static string GetChangeIdRedisKey() => GetDescription(RedisMessageKeyEnum.ChangeId);
     public static string GetLeagueNameRedisKey() => GetDescription(RedisMessageKeyEnum.LeagueName);
 

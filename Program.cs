@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using FlippingExilesPublicStashAPI;
 using FlippingExilesPublicStashAPI.API;
+using FlippingExilesPublicStashAPI.Redis;
 using StackExchange.Redis;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -24,13 +25,6 @@ builder.Services.AddSingleton<RedisMessage>(sp =>
     return new RedisMessage(redisConnectionString, logger);
 });
 
-// Register ItemFilter
-builder.Services.AddSingleton<ItemFilter>(sp =>
-{
-    var logger = sp.GetRequiredService<ILogger<ItemFilter>>();
-    return new ItemFilter(logger);
-});
-
 // Register OAuthTokenClient
 builder.Services.AddSingleton<OAuthTokenClient>(sp =>
 {
@@ -47,6 +41,21 @@ builder.Services.AddSingleton<OAuthTokenClient>(sp =>
     return new OAuthTokenClient(httpClient, tokenUrl, clientId, clientSecret, logger, redisMessage, itemFilter);
 });
 
+builder.Services.AddSingleton<TradeListHandler>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<TradeListHandler>>();
+    var redisMessage = sp.GetRequiredService<RedisMessage>();
+    return new TradeListHandler(logger, redisMessage);
+});
+
+// Register ItemFilter
+builder.Services.AddSingleton<ItemFilter>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ItemFilter>>();
+    var essenceTradeListHandler = sp.GetRequiredService<TradeListHandler>();
+    return new ItemFilter(logger,essenceTradeListHandler);
+});
+
 builder.Services.AddSingleton<RateLimiter>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<RateLimiter>>();
@@ -55,6 +64,8 @@ builder.Services.AddSingleton<RateLimiter>(sp =>
 
 // Register the Worker service
 builder.Services.AddHostedService<Worker>();
+
+// builder.Services.AddHostedService<LeagueBackgroundService>(); commenting it out as /leagues scope is bugged and somehow no access
 
 var host = builder.Build();
 host.Run();

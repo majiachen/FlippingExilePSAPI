@@ -1,19 +1,23 @@
 ﻿using FlippingExilesPublicStashAPI.PublicStashPOCO;
+using FlippingExilesPublicStashAPI.Redis;
 using Microsoft.Extensions.Logging;
 
 public class ItemFilter
 {
     private readonly ILogger<ItemFilter> _logger;
+    private readonly TradeListHandler _tradeListHandler;
 
-    public ItemFilter(ILogger<ItemFilter> logger)
+    public ItemFilter(ILogger<ItemFilter> logger, TradeListHandler tradeListHandler)
     {
         _logger = logger;
+        _tradeListHandler = tradeListHandler;
     }
 
 
 
     public void FilterStashes(List<Stash> stashes)
     {
+        
         if (stashes == null) return;
         
         ProcessFilteredStashes(stashes.Where(stash => stash.Items is { Count: > 0 } && (
@@ -23,7 +27,8 @@ public class ItemFilter
                 stash.StashType.Contains("Blight") ||
                 stash.StashType.Contains("Delirium") ||
                 stash.StashType.Contains("Fragment") ||
-                stash.StashType.Contains("Ultimatum")))
+                stash.StashType.Contains("Ultimatum") || 
+                stash.StashType.Contains("PremiumStash")))
             .ToList());
     }
     
@@ -44,12 +49,6 @@ public class ItemFilter
             // Process each filtered list separately
             ProcessEssenceItems(essenceItems, stash);
             ProcessFossilItems(fossilItems, stash);
-        
-            // Log all items with notes if needed
-            foreach (var stashItem in itemsWithNotes)
-            {
-                _logger.LogInformation($"Item found with note: {stashItem} at stash: {stash.Id} with stash type: {stash.StashType}");
-            }
         }
     }
 
@@ -72,18 +71,12 @@ public class ItemFilter
 
     private void ProcessEssenceItems(List<Item> essenceItems, Stash stash)
     {
-        foreach (var item in essenceItems)
-        {
-            
-        }
+        _tradeListHandler.SetEssenceMessage(essenceItems, stash);
     }
 
     private void ProcessFossilItems(List<Item> fossilItems, Stash stash)
     {
-        foreach (var item in fossilItems)
-        {
-            
-        }
+        _tradeListHandler.SetFossilMessage(fossilItems, stash);
     }
     
 
