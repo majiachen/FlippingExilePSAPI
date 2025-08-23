@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: paradoproxia/FlippingExilePSAPI 
+  IMAGE_NAME: ${{ secrets.DOCKER_REPO }}/FlippingExilePSAPI 
 
 jobs:
   build-and-push:
