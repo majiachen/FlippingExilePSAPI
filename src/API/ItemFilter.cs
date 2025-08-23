@@ -44,11 +44,14 @@ public class ItemFilter
             // Apply separate filters to the filtered list
             var essenceItems = FilterForEssences(itemsWithNotes);
             var fossilItems = FilterForFossils(itemsWithNotes);
+            var scarabItems = FilterForScarabs(itemsWithNotes);
+
             // Add more filters as needed
         
             // Process each filtered list separately
             ProcessEssenceItems(essenceItems, stash);
             ProcessFossilItems(fossilItems, stash);
+            ProcessScarabItems(fossilItems, stash);
         }
     }
 
@@ -68,6 +71,12 @@ public class ItemFilter
         var fossilDescriptions = EnumExtensions.GetAllDescriptions<FossilEnum>();
         return items.Where(item => fossilDescriptions.Contains(item.Name)).ToList();
     }
+    
+    private List<Item> FilterForScarabs(List<Item> items)
+    {
+        var scarabDescriptions = EnumExtensions.GetAllDescriptions<ScarabEnum>();
+        return items.Where(item => scarabDescriptions.Contains(item.Name)).ToList();
+    }
 
     private void ProcessEssenceItems(List<Item> essenceItems, Stash stash)
     {
@@ -79,6 +88,10 @@ public class ItemFilter
         _tradeListHandler.SetFossilMessage(fossilItems, stash);
     }
     
+    private void ProcessScarabItems(List<Item> scarabItems, Stash stash)
+    {
+        _tradeListHandler.SetEssenceMessage(scarabItems, stash);
+    }
 
 
 
