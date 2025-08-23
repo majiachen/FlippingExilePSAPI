@@ -20,7 +20,6 @@ builder.Services.AddHttpClient("PathOfExileClient", client =>
 builder.Services.AddSingleton<RedisMessage>(sp =>
 {
     string redisConnectionString = builder.Configuration["RedisConnectionString"];
-    string redisKey = "FlippingExilesPublicStashAPI";
     var logger = sp.GetRequiredService<ILogger<RedisMessage>>();
     return new RedisMessage(redisConnectionString, logger);
 });
