@@ -5,10 +5,12 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["FlippingExilesPublicStashAPI/FlippingExilesPublicStashAPI.csproj", "FlippingExilesPublicStashAPI/"]
-RUN dotnet restore "FlippingExilesPublicStashAPI/FlippingExilesPublicStashAPI.csproj"
+
+# FIXED: Copy from current directory instead of subdirectory
+COPY ["FlippingExilesPublicStashAPI.csproj", "."]
+RUN dotnet restore "FlippingExilesPublicStashAPI.csproj"
 COPY . .
-WORKDIR "/src/FlippingExilesPublicStashAPI"
+WORKDIR "/src"
 RUN dotnet build "FlippingExilesPublicStashAPI.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
