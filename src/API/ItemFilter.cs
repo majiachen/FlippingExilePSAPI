@@ -47,9 +47,9 @@ public class ItemFilter
             var scarabItems = FilterForScarabs(itemsWithNotes);
             
             _logger.LogInformation("available items for processing: " + string.Join(",",essenceItems.Select(
-                e => $"name: {e.Name} + price : {e.Note}"),fossilItems.Select(
-                f => $"name: {f.Name} + price : {f.Note}"),scarabItems.Select(
-                s => $"name: {s.Name} + price : {s.Note}")));
+                e => $"name: {e.Name} + price : {e.Note}").ToList()) + "/n"+ string.Join(",",fossilItems.Select(
+                f => $"name: {f.Name} + price : {f.Note}").ToList()) + "/n"+ string.Join(",",scarabItems.Select(
+                s => $"name: {s.Name} + price : {s.Note}").ToList()));
             // Add more filters as needed
         
             // Process each filtered list separately
