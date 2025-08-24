@@ -46,7 +46,10 @@ public class ItemFilter
             var fossilItems = FilterForFossils(itemsWithNotes);
             var scarabItems = FilterForScarabs(itemsWithNotes);
             
-            _logger.LogInformation("available items for processing: " + string.Join(",",essenceItems,fossilItems,scarabItems));
+            _logger.LogInformation("available items for processing: " + string.Join(",",essenceItems.Select(
+                e => $"name: {e.Name} + price : {e.Note}"),fossilItems.Select(
+                f => $"name: {f.Name} + price : {f.Note}"),scarabItems.Select(
+                s => $"name: {s.Name} + price : {s.Note}")));
             // Add more filters as needed
         
             // Process each filtered list separately
