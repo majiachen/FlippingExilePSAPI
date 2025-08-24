@@ -40,7 +40,6 @@ public class ItemFilter
         {
             // First filter for items with notes (creates a new list, doesn't modify original)
             var itemsWithNotes = FilterForItemsWithNotes(stash.Items);
-            
             // Apply separate filters to the filtered list
             var essenceItems = FilterForEssences(itemsWithNotes);
             var fossilItems = FilterForFossils(itemsWithNotes);

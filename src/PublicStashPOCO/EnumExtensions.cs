@@ -11,6 +11,8 @@ public static class EnumExtensions
     public static IEnumerable<Enum> EssenceEnumsList => Enum.GetValues(typeof(EssenceEnum)).Cast<Enum>();
 
     public static IEnumerable<Enum> FossilEnumsList => Enum.GetValues(typeof(FossilEnum)).Cast<Enum>();
+    
+    public static IEnumerable<Enum> ScarabEnumsList => Enum.GetValues(typeof(ScarabEnum)).Cast<Enum>();
 
     public static readonly CurrencySuffixEnum[] CurrencySuffixEnumsList = (CurrencySuffixEnum[])Enum.GetValues(typeof(CurrencySuffixEnum));
 

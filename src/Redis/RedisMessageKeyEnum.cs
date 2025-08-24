@@ -17,6 +17,9 @@ public enum RedisMessageKeyEnum
     [Description("FlippingExilesPublicStashAPI.FossilTradeList")]
     FossilTradeList,
     
+    [Description("FlippingExilesPublicStashAPI.ScarabTradeList")]
+    ScarabTradeList,
+    
     [Description("FlippingExilesPublicStashAPI.CatalystsTradeList")]
     CatalystsTradeList,
     
@@ -48,6 +51,9 @@ public static class RedisMessageKeyHelper
     
     public static string GetTestRedisKey() => GetDescription(RedisMessageKeyEnum.Test);
     public static string GetEssenceTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.EssenceTradeList);
+    
+    public static string GetScarabTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.ScarabTradeList);
+
     public static string GetFossilTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.FossilTradeList);
     public static string GetCatalystsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.CatalystsTradeList);
     public static string GetOilsTradeListRedisKey() => GetDescription(RedisMessageKeyEnum.OilsTradeList);

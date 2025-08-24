@@ -47,7 +47,8 @@ public class TradeListHandler
 
                 // Process the filtered items for this specific currency suffix
                 if (filteredItems.Count == 0) continue;
-                
+                _logger.LogInformation("Item found, processing then adding to list: " + string.Join(";",items.ToString()));
+
                 accountAndStashMap.Item = filteredItems;
                 
                 var redisMessageKey = ConfigureRedisKey(enumValue.GetDescription(), currencySuffix.GetDescription(), enumList, stash);
@@ -81,12 +82,15 @@ public class TradeListHandler
         string redisKey;
         
         // Determine which Redis key to use based on the enum list type
-        if (enumList == EnumExtensions.FossilEnumsList)
+        if (Equals(enumList, EnumExtensions.FossilEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetFossilTradeListRedisKey();
-        }else if (enumList == EnumExtensions.EssenceEnumsList)
+        }else if (Equals(enumList, EnumExtensions.EssenceEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetEssenceTradeListRedisKey();
+        }else if (Equals(enumList, EnumExtensions.ScarabEnumsList))
+        {
+            redisKey = RedisMessageKeyHelper.GetScarabTradeListRedisKey();
         }else
         {
             // Default to essence key if unknown type
