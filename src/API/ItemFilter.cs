@@ -40,18 +40,19 @@ public class ItemFilter
         {
             // First filter for items with notes (creates a new list, doesn't modify original)
             var itemsWithNotes = FilterForItemsWithNotes(stash.Items);
-        
+            
             // Apply separate filters to the filtered list
             var essenceItems = FilterForEssences(itemsWithNotes);
             var fossilItems = FilterForFossils(itemsWithNotes);
             var scarabItems = FilterForScarabs(itemsWithNotes);
-
+            
+            _logger.LogInformation("available items for processing: " + string.Join(",",essenceItems,fossilItems,scarabItems));
             // Add more filters as needed
         
             // Process each filtered list separately
             ProcessEssenceItems(essenceItems, stash);
             ProcessFossilItems(fossilItems, stash);
-            ProcessScarabItems(fossilItems, stash);
+            ProcessScarabItems(scarabItems, stash);
         }
     }
 
