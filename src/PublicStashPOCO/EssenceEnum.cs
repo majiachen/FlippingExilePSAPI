@@ -94,4 +94,3 @@ public enum EssenceEnum
     [Description("Remnant Of Corruption")]
     RemnantOfCorruption
 }
-

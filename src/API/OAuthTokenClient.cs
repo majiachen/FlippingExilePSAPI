@@ -32,89 +32,126 @@ public class OAuthTokenClient
         _redisMessage = redisMessage;
         _itemFilter = itemFilter;
     }
+    
+    private async Task<HttpResponseMessage> MakeApiRequestAsync(string apiUrl, Dictionary<string, string> parameters, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(_accessToken))
+        {
+            await SetAccessTokenAsync(cancellationToken);
+        }
 
+        string requestUri = QueryHelpers.AddQueryString(apiUrl, parameters);
+        
+        var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
+        request.Headers.Add("User-Agent", "OAuth flippingexiles/1.0 (contact: jackma790@gmail.com)");
+        
+        return await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    }
+
+    private async Task<string> ProcessStashResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            UpdateRateLimit(response);
+            
+            using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
+            using (var reader = new StreamReader(stream))
+            using (var jsonReader = new JsonTextReader(reader))
+            {
+                var serializer = new JsonSerializer
+                {
+                    NullValueHandling = NullValueHandling.Ignore,
+                    MissingMemberHandling = MissingMemberHandling.Ignore
+                };
+                var stashResponse = serializer.Deserialize<StashResponse>(jsonReader);
+                if (stashResponse != null)
+                {
+                    _logger.LogInformation("changed ID Updated: " + stashResponse.NextChangeId);
+                    _redisMessage.SetMessage(RedisMessageKeyHelper.GetChangeIdRedisKey(), stashResponse.NextChangeId);
+                }
+
+                if (stashResponse?.Stashes == null) return "Stream processing completed.";
+
+                _itemFilter.FilterStashes(stashResponse.Stashes);
+            }
+
+            return "Stream processing completed.";
+        }
+        else
+        {
+            string errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
+
+            throw new ApiException(response.StatusCode, errorResponse);
+        }
+    }
+
+    private async Task<string> ProcessLeagueResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            UpdateRateLimit(response);
+            
+            using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
+            using (var reader = new StreamReader(stream))
+            using (var jsonReader = new JsonTextReader(reader))
+            {
+                var serializer = new JsonSerializer
+                {
+                    NullValueHandling = NullValueHandling.Ignore,
+                    MissingMemberHandling = MissingMemberHandling.Ignore
+                };
+                var leagueResponse = serializer.Deserialize<List<League>>(jsonReader);
+                
+                _logger.LogInformation("league Updated: " + leagueResponse);
+                var serializedData = JsonConvert.SerializeObject(leagueResponse);
+                LeagueHelper.LeaguesList = leagueResponse;
+                _redisMessage.SetMessage(RedisMessageKeyHelper.GetLeagueNameRedisKey(), serializedData, _cacheExpiry);
+                
+            }
+
+            return "Stream league processing completed.";
+        }
+        else
+        {
+            string errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
+
+            throw new ApiException(response.StatusCode, errorResponse);
+        }
+    }
 
     public async Task<string> GetPublicStashesAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             changeId = _redisMessage.GetMessage(RedisMessageKeyHelper.GetChangeIdRedisKey());
-            _logger.LogInformation("changed ID Acquired: "+  changeId);
+            _logger.LogInformation("changed ID Acquired: " + changeId);
 
-            
-            if (string.IsNullOrEmpty(_accessToken))
+            var parameters = new Dictionary<string, string>
             {
-                await SetAccessTokenAsync(cancellationToken);
-            }
+                ["id"] = changeId
+            };
 
+            var response = await MakeApiRequestAsync("https://api.pathofexile.com/public-stash-tabs", parameters, cancellationToken);
             
-            const string apiUrl = "https://api.pathofexile.com/public-stash-tabs";
-            
-            var parameters = (new Dictionary<string, string>
-                {
-                    ["id"] = changeId
-                }).Where(p => p.Value != null)
-                .ToDictionary(p => p.Key, p => p.Value!);
-            
-            string requestUri = QueryHelpers.AddQueryString(apiUrl, parameters);
-            
-            var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
-            request.Headers.Add("User-Agent", "OAuth flippingexiles/1.0 (contact: jackma790@gmail.com)");
-            // Send the request and get the response as a stream
-            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                UpdateRateLimit(response);
-                // Process the response as a stream
-                using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
-                using (var reader = new StreamReader(stream))
-                using (var jsonReader = new JsonTextReader(reader))
-                {
-                    var serializer = new JsonSerializer
-                    {
-                        NullValueHandling = NullValueHandling.Ignore,
-                        MissingMemberHandling = MissingMemberHandling.Ignore
-                    };
-                    var stashResponse = serializer.Deserialize<StashResponse>(jsonReader);
-                    if (stashResponse != null)
-                    {
-                        _logger.LogInformation("changed ID Updated: "+  stashResponse.NextChangeId);
-                        _redisMessage.SetMessage(RedisMessageKeyHelper.GetChangeIdRedisKey(),stashResponse.NextChangeId);
-                    }
-
-                    if (stashResponse?.Stashes == null) return "Stream processing completed.";
-            
-                    _itemFilter.FilterStashes(stashResponse.Stashes);
-
-                }
-
-                return "Stream processing completed.";
-            }
-            else
-            {
-                string errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
-
-                // Log the error
-                _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
-
-                // Throw a custom exception
-                throw new ApiException(response.StatusCode, errorResponse);
-            }
+            return await ProcessStashResponseAsync(response, cancellationToken);
         }
         catch (ApiException ex)
         {
             _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
-            throw; // Re-throw the exception
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
-            throw; // Re-throw the exception
+            throw;
         }
     }
-    
+
     public async Task<string> GetLeaguesAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -126,77 +163,25 @@ public class OAuthTokenClient
                 return "Cached league data returned.";
             }
 
-            if (string.IsNullOrEmpty(_accessToken))
+            var parameters = new Dictionary<string, string>()
             {
-                await SetAccessTokenAsync(cancellationToken);
-            }
-
+                ["type"] = "main"
+            };
+            var response = await MakeApiRequestAsync("https://api.pathofexile.com/leagues", parameters, cancellationToken);
             
-            const string apiUrl = "https://api.pathofexile.com/leagues";
-            
-            var parameters = (new Dictionary<string, string>
-                {
-                    ["type"] = "main"
-                }).Where(p => p.Value != null)
-                .ToDictionary(p => p.Key, p => p.Value!);
-            
-            string requestUri = QueryHelpers.AddQueryString(apiUrl, parameters);
-            
-            var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
-            request.Headers.Add("User-Agent", "OAuth flippingexiles/1.0 (contact: jackma790@gmail.com)");
-            // Send the request and get the response as a stream
-            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                UpdateRateLimit(response);
-                // Process the response as a stream
-                using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
-                using (var reader = new StreamReader(stream))
-                using (var jsonReader = new JsonTextReader(reader))
-                {
-                    var serializer = new JsonSerializer
-                    {
-                        NullValueHandling = NullValueHandling.Ignore,
-                        MissingMemberHandling = MissingMemberHandling.Ignore
-                    };
-                    var leagueResponse = serializer.Deserialize<LeagueResponse>(jsonReader);
-                    if (leagueResponse != null)
-                    {
-                        _logger.LogInformation("league Updated: "+  leagueResponse);
-                        var serializedData = JsonConvert.SerializeObject(leagueResponse);
-                        LeagueHelper.LeaguesList = leagueResponse.Leagues;
-                        _redisMessage.SetMessage(RedisMessageKeyHelper.GetLeagueNameRedisKey(), serializedData, _cacheExpiry);
-                    }
-
-                }
-
-                return "Stream league processing completed.";
-            }
-            else
-            {
-                string errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
-
-                // Log the error
-                _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
-
-                // Throw a custom exception
-                throw new ApiException(response.StatusCode, errorResponse);
-            }
+            return await ProcessLeagueResponseAsync(response, cancellationToken);
         }
         catch (ApiException ex)
         {
             _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
-            throw; // Re-throw the exception
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
-            throw; // Re-throw the exception
+            throw;
         }
     }
-
 
     private async Task<TokenResponse> SetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
@@ -206,7 +191,7 @@ public class OAuthTokenClient
             Address = _tokenUrl,
             ClientId = _clientId,
             ClientSecret = _clientSecret,
-            Scope = "service:psapi" // Specify the required scope
+            Scope = "service:psapi service:leagues" // Specify the required scope
         }, cancellationToken);
 
         if (tokenResponse.IsError)
@@ -233,20 +218,5 @@ public class OAuthTokenClient
 
         }
     }
-    
-    private List<Item> FilterItems(List<Item> stashItems)
-    {
-        
-        stashItems.RemoveAll(item => string.IsNullOrEmpty(item.Note));
-        _logger.LogInformation("number of stashes after filterItems: "+stashItems.Count);
-        stashItems.ForEach(item => _logger.LogInformation(item.ToString()));
-        return stashItems;
-    }
-    
-    private List<Item> FilterEssenceItems(List<Item> stashItems)
-    {
-        throw new NotImplementedException();
-    }
-    
 
 }

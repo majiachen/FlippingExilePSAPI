@@ -24,6 +24,16 @@ public class TradeListHandler
     {
         ProcessItems(fossilItems, stash, EnumExtensions.FossilEnumsList);
     }
+    
+    public void SetScarabMessage(List<Item> scarabItems, Stash stash)
+    {
+        ProcessItems(scarabItems, stash, EnumExtensions.ScarabEnumsList);
+    }
+    
+    public void SetOilMessage(List<Item> scarabItems, Stash stash)
+    {
+        ProcessItems(scarabItems, stash, EnumExtensions.OilEnumsList);
+    }
 
     private void ProcessItems(List<Item> items, Stash stash, IEnumerable<Enum> enumList)
     {
@@ -35,29 +45,41 @@ public class TradeListHandler
         };
         List<string> currencySuffixList = EnumExtensions.GetAllDescriptions<CurrencySuffixEnum>();
 
-        foreach (var enumValue in enumList)
+        var enumValues = enumList.ToList();
+        foreach (var enumValue in enumValues)
         {
-            foreach (var currencySuffix in EnumExtensions.CurrencySuffixEnumsList)
+            // Get the description of the current enum value
+            var enumDescription = enumValue.GetDescription();
+            
+            // Filter items that have BaseType matching the enum description
+            var filteredItems = items.Where(item => 
+                item.Note != null && 
+                item.BaseType != null &&
+                item.BaseType.Contains(enumDescription, StringComparison.CurrentCultureIgnoreCase)
+            ).ToList();
+
+            // Process the filtered items for this specific enum value
+            if (filteredItems.Count == 0) continue;
+            
+            // For each item, find which currency suffix it contains and create a key accordingly
+            foreach (var item in filteredItems)
             {
-                // Filter items that contain the current currency suffix
-                var filteredItems = items.Where(item => 
-                    item.Note != null && 
-                    item.Note.Contains(currencySuffix.GetDescription()) && item.Name.Contains(enumValue.GetDescription())
-                ).ToList();
+                var matchingCurrencySuffix = currencySuffixList.FirstOrDefault(suffix => 
+                    item.Note.Contains(suffix, StringComparison.CurrentCultureIgnoreCase));
+            
+                if (matchingCurrencySuffix == null) continue;
+            
+                _logger.LogInformation("Item found, processing then adding to list: " + string.Join(";",filteredItems.Select(item => item.ToString())));
 
-                // Process the filtered items for this specific currency suffix
-                if (filteredItems.Count == 0) continue;
-                _logger.LogInformation("Item found, processing then adding to list: " + string.Join(";",items.ToString()));
-
-                accountAndStashMap.Item = filteredItems;
-                
-                var redisMessageKey = ConfigureRedisKey(enumValue.GetDescription(), currencySuffix.GetDescription(), enumList, stash);
+                accountAndStashMap.Item = new List<Item> { item };
+            
+                var redisMessageKey = ConfigureRedisKey(enumValue.GetDescription(), matchingCurrencySuffix, enumValues, stash);
                 var listOfAccountAndStashMapFromRedis = GetExistingRedisData(redisMessageKey);
-                
+            
                 listOfAccountAndStashMapFromRedis.RemoveAll(map => map.StashId == stash.Id);
-                
+            
                 listOfAccountAndStashMapFromRedis.Add(accountAndStashMap);
-                
+            
                 _redisMessage.SetMessage(redisMessageKey, JsonConvert.SerializeObject(listOfAccountAndStashMapFromRedis));
                 _logger.LogInformation("Trade list updated in redis: " + listOfAccountAndStashMapFromRedis);
             }
@@ -82,15 +104,18 @@ public class TradeListHandler
         string redisKey;
         
         // Determine which Redis key to use based on the enum list type
-        if (Equals(enumList, EnumExtensions.FossilEnumsList))
+        if (enumList.SequenceEqual(EnumExtensions.FossilEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetFossilTradeListRedisKey();
-        }else if (Equals(enumList, EnumExtensions.EssenceEnumsList))
+        }else if (enumList.SequenceEqual(EnumExtensions.EssenceEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetEssenceTradeListRedisKey();
-        }else if (Equals(enumList, EnumExtensions.ScarabEnumsList))
+        }else if (enumList.SequenceEqual(EnumExtensions.ScarabEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetScarabTradeListRedisKey();
+        }else if (enumList.SequenceEqual(EnumExtensions.OilEnumsList))
+        {
+            redisKey = RedisMessageKeyHelper.GetOilsTradeListRedisKey();
         }else
         {
             // Default to essence key if unknown type

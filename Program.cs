@@ -64,7 +64,7 @@ builder.Services.AddSingleton<RateLimiter>(sp =>
 // Register the Worker service
 builder.Services.AddHostedService<Worker>();
 
-// builder.Services.AddHostedService<LeagueBackgroundService>(); commenting it out as /leagues scope is bugged and somehow no access
+ builder.Services.AddHostedService<LeagueBackgroundService>(); //commenting it out as /leagues scope is bugged and somehow no access
 
 var host = builder.Build();
 host.Run();
