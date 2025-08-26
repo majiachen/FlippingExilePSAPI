@@ -159,6 +159,8 @@ public class OAuthTokenClient
             var cachedData = _redisMessage.GetMessage(RedisMessageKeyHelper.GetLeagueNameRedisKey());
             if (!string.IsNullOrEmpty(cachedData))
             {
+                var leagueResponse = JsonConvert.DeserializeObject<List<League>>(cachedData);
+                LeagueHelper.LeaguesList = leagueResponse;
                 _logger.LogInformation("Returning cached league data.");
                 return "Cached league data returned.";
             }
