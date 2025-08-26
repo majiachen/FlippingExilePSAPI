@@ -41,6 +41,8 @@ public enum EssenceEnum
     ShriekingEssenceOfWoe,
     [Description("Shrieking Essence Of Wrath")]
     ShriekingEssenceOfWrath,
+    [Description("Shrieking Essence Of Zeal")]
+    ShriekingEssenceOfZeal,
 
     // Deafening Essences
     [Description("Deafening Essence Of Anger")]
@@ -81,6 +83,8 @@ public enum EssenceEnum
     DeafeningEssenceOfWoe,
     [Description("Deafening Essence Of Wrath")]
     DeafeningEssenceOfWrath,
+    [Description("Deafening Essence Of Zeal")]
+    DeafeningEssenceOfZeal,
 
     // Special Essences
     [Description("Essence Of Hysteria")]

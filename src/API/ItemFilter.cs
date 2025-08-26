@@ -37,6 +37,7 @@ public class ItemFilter
                       item.BaseType != null && 
                       (item.BaseType.Contains("Fossil", StringComparison.CurrentCultureIgnoreCase) ||
                        item.BaseType.Contains("Essence Of", StringComparison.CurrentCultureIgnoreCase) ||
+                       item.BaseType.Contains("Remnant of Corruption", StringComparison.CurrentCultureIgnoreCase) ||
                        item.BaseType.Contains("Orb", StringComparison.CurrentCultureIgnoreCase) ||
                        item.BaseType.Contains("Oil", StringComparison.CurrentCultureIgnoreCase) ||
                        item.BaseType.Contains("Delirium Orb", StringComparison.CurrentCultureIgnoreCase) ||
@@ -56,16 +57,39 @@ public class ItemFilter
             {
                 _logger.LogInformation("item with notes: " + string.Join(",", itemsWithNotes.Select(
                     i=> $"name: {i.Name} + basetype : {i.BaseType} + price : {i.Note}")));
+                List<Item> essenceItems = new();
+                List<Item> fossilItems = new();
+                List<Item> scarabItems = new();
+                List<Item> oilItems = new();
+
                 // Apply separate filters to the filtered list
-                var essenceItems = FilterForEssences(itemsWithNotes);
-                var fossilItems = FilterForFossils(itemsWithNotes);
-                var scarabItems = FilterForScarabs(itemsWithNotes);
-                var oilItems = FilterForOils(itemsWithNotes);
+                if (stash.StashType.Contains("Essence", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    essenceItems = FilterForEssences(itemsWithNotes);
+                }
+                else if (stash.StashType.Contains("Blight", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    oilItems = FilterForOils(itemsWithNotes);
+                }
+                else if (stash.StashType.Contains("Fragment", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    scarabItems = FilterForScarabs(itemsWithNotes);
+                }
+                else if (stash.StashType.Contains("Delve", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    fossilItems = FilterForFossils(itemsWithNotes);
+                }
+                else if (stash.StashType.Contains("PremiumStash", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    // For PremiumStash, we need to check the items themselves to determine what type they are
+                    essenceItems = FilterForEssences(itemsWithNotes);
+
+                    fossilItems = FilterForFossils(itemsWithNotes);
+                    scarabItems = FilterForScarabs(itemsWithNotes);
+                    oilItems = FilterForOils(itemsWithNotes);
+                }
             
-                // Add more filters as needed
-        
                 // Process each filtered list separately
-                
                 if (essenceItems.Any()) 
                 {
                     ProcessEssenceItems(essenceItems, stash);
@@ -96,40 +120,36 @@ public class ItemFilter
     private List<Item> FilterForEssences(List<Item> items)
     {
         var essenceDescriptions = EnumExtensions.GetAllDescriptions<EssenceEnum>();
-        var essenceSet = new HashSet<string>(essenceDescriptions, StringComparer.OrdinalIgnoreCase);
     
         return items.Where(item => 
-            essenceSet.Any(description => item.BaseType.Contains(description))
+            essenceDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))
         ).ToList();
     }
 
     private List<Item> FilterForFossils(List<Item> items)
     {
         var fossilDescriptions = EnumExtensions.GetAllDescriptions<FossilEnum>();
-        var fossilSet = new HashSet<string>(fossilDescriptions, StringComparer.OrdinalIgnoreCase);
         
         return items.Where(item => 
-            fossilSet.Any(description => item.BaseType.Contains(description))
+            fossilDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))
         ).ToList();
     }
     
     private List<Item> FilterForScarabs(List<Item> items)
     {
         var scarabDescriptions = EnumExtensions.GetAllDescriptions<ScarabEnum>();
-        var scarabSet = new HashSet<string>(scarabDescriptions, StringComparer.OrdinalIgnoreCase);
         
         return items.Where(item => 
-            scarabSet.Any(description => item.BaseType.Contains(description))
+            scarabDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))
         ).ToList();
     }
     
     private List<Item> FilterForOils(List<Item> items)
     {
         var oilDescriptions = EnumExtensions.GetAllDescriptions<OilEnum>();
-        var oilSet = new HashSet<string>(oilDescriptions, StringComparer.OrdinalIgnoreCase);
         
         return items.Where(item => 
-            oilSet.Any(description => item.BaseType.Contains(description))
+            oilDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))
         ).ToList();
     }
 
