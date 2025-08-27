@@ -1,12 +1,13 @@
 ﻿using System.ComponentModel;
 using System.Reflection;
-using FlippingExilesPublicStashAPI.LeaguePOCO;
 using FlippingExilesPublicStashAPI.Redis;
 
 namespace FlippingExilesPublicStashAPI.PublicStashPOCO;
 
-public static class EnumExtensions
+public static class POCOHelper
 {
+    public static List<League> LeaguesList;
+    public static LeagueMarketData MarketData;
     
     public static IEnumerable<Enum> EssenceEnumsList => Enum.GetValues(typeof(EssenceEnum)).Cast<Enum>();
 

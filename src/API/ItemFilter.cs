@@ -1,5 +1,4 @@
-﻿using FlippingExilesPublicStashAPI.LeaguePOCO;
-using FlippingExilesPublicStashAPI.PublicStashPOCO;
+﻿using FlippingExilesPublicStashAPI.PublicStashPOCO;
 using FlippingExilesPublicStashAPI.Redis;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +23,7 @@ public class ItemFilter
         ProcessFilteredStashes(stashes.Where(stash => 
                 stash.Items is { Count: > 0 } && 
                 stash.StashType != null && 
-                LeagueHelper.LeaguesList.Any(league => league.Id.Equals(stash.League)) &&
+                POCOHelper.LeaguesList.Any(league => league.Id.Equals(stash.League)) &&
                 (stash.StashType.Contains("Currency", StringComparison.CurrentCultureIgnoreCase) ||
                  stash.StashType.Contains("Delve", StringComparison.CurrentCultureIgnoreCase) ||
                  stash.StashType.Contains("Essence", StringComparison.CurrentCultureIgnoreCase) ||
@@ -119,7 +118,7 @@ public class ItemFilter
 
     private List<Item> FilterForEssences(List<Item> items)
     {
-        var essenceDescriptions = EnumExtensions.GetAllDescriptions<EssenceEnum>();
+        var essenceDescriptions = POCOHelper.GetAllDescriptions<EssenceEnum>();
     
         return items.Where(item => 
             essenceDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))
@@ -128,7 +127,7 @@ public class ItemFilter
 
     private List<Item> FilterForFossils(List<Item> items)
     {
-        var fossilDescriptions = EnumExtensions.GetAllDescriptions<FossilEnum>();
+        var fossilDescriptions = POCOHelper.GetAllDescriptions<FossilEnum>();
         
         return items.Where(item => 
             fossilDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))
@@ -137,7 +136,7 @@ public class ItemFilter
     
     private List<Item> FilterForScarabs(List<Item> items)
     {
-        var scarabDescriptions = EnumExtensions.GetAllDescriptions<ScarabEnum>();
+        var scarabDescriptions = POCOHelper.GetAllDescriptions<ScarabEnum>();
         
         return items.Where(item => 
             scarabDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))
@@ -146,7 +145,7 @@ public class ItemFilter
     
     private List<Item> FilterForOils(List<Item> items)
     {
-        var oilDescriptions = EnumExtensions.GetAllDescriptions<OilEnum>();
+        var oilDescriptions = POCOHelper.GetAllDescriptions<OilEnum>();
         
         return items.Where(item => 
             oilDescriptions.Any(description => item.BaseType.Contains(description,StringComparison.CurrentCultureIgnoreCase))

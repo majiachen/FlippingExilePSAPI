@@ -32,7 +32,6 @@ public class Worker : BackgroundService
         {
             try
             {
-                await RateLimiter.WaitAsync(stoppingToken);
                 // Call the API
                 string apiResponse = await _oauthClient.GetPublicStashesAsync(stoppingToken);
             }

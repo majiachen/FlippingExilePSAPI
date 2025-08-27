@@ -17,22 +17,22 @@ public class TradeListHandler
 
     public void SetEssenceMessage(List<Item> essenceItems, Stash stash)
     {
-        ProcessItems(essenceItems, stash, EnumExtensions.EssenceEnumsList);
+        ProcessItems(essenceItems, stash, POCOHelper.EssenceEnumsList);
     }
 
     public void SetFossilMessage(List<Item> fossilItems, Stash stash)
     {
-        ProcessItems(fossilItems, stash, EnumExtensions.FossilEnumsList);
+        ProcessItems(fossilItems, stash, POCOHelper.FossilEnumsList);
     }
     
     public void SetScarabMessage(List<Item> scarabItems, Stash stash)
     {
-        ProcessItems(scarabItems, stash, EnumExtensions.ScarabEnumsList);
+        ProcessItems(scarabItems, stash, POCOHelper.ScarabEnumsList);
     }
     
     public void SetOilMessage(List<Item> scarabItems, Stash stash)
     {
-        ProcessItems(scarabItems, stash, EnumExtensions.OilEnumsList);
+        ProcessItems(scarabItems, stash, POCOHelper.OilEnumsList);
     }
 
     private void ProcessItems(List<Item> items, Stash stash, IEnumerable<Enum> enumList)
@@ -43,7 +43,7 @@ public class TradeListHandler
             AccountName = stash.AccountName,
             StashId = stash.Id
         };
-        List<string> currencySuffixList = EnumExtensions.GetAllDescriptions<CurrencySuffixEnum>();
+        List<string> currencySuffixList = POCOHelper.GetAllDescriptions<CurrencySuffixEnum>();
 
         var enumValues = enumList.ToList();
         foreach (var enumValue in enumValues)
@@ -104,16 +104,16 @@ public class TradeListHandler
         string redisKey;
         
         // Determine which Redis key to use based on the enum list type
-        if (enumList.SequenceEqual(EnumExtensions.FossilEnumsList))
+        if (enumList.SequenceEqual(POCOHelper.FossilEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetFossilTradeListRedisKey();
-        }else if (enumList.SequenceEqual(EnumExtensions.EssenceEnumsList))
+        }else if (enumList.SequenceEqual(POCOHelper.EssenceEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetEssenceTradeListRedisKey();
-        }else if (enumList.SequenceEqual(EnumExtensions.ScarabEnumsList))
+        }else if (enumList.SequenceEqual(POCOHelper.ScarabEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetScarabTradeListRedisKey();
-        }else if (enumList.SequenceEqual(EnumExtensions.OilEnumsList))
+        }else if (enumList.SequenceEqual(POCOHelper.OilEnumsList))
         {
             redisKey = RedisMessageKeyHelper.GetOilsTradeListRedisKey();
         }else

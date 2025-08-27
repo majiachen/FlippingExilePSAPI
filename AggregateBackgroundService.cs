@@ -1,14 +1,14 @@
-﻿// This would be in a separate file like LeagueBackgroundService.cs
+﻿// This would be in a separate file like AggregateBackgroundService.cs
 using Microsoft.Extensions.Hosting;
 using System.Threading.Tasks;
 using FlippingExilesPublicStashAPI.API;
 
-public class LeagueBackgroundService : BackgroundService
+public class AggregateBackgroundService : BackgroundService
 {
     private readonly OAuthTokenClient _oauthClient;
-    private readonly ILogger<LeagueBackgroundService> _logger;
+    private readonly ILogger<AggregateBackgroundService> _logger;
     
-    public LeagueBackgroundService(OAuthTokenClient oauthClient, ILogger<LeagueBackgroundService> logger)
+    public AggregateBackgroundService(OAuthTokenClient oauthClient, ILogger<AggregateBackgroundService> logger)
     {
         _oauthClient = oauthClient;
         _logger = logger;
@@ -20,8 +20,7 @@ public class LeagueBackgroundService : BackgroundService
         {
             try
             {
-                await _oauthClient.GetLeaguesAsync(stoppingToken);
-                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
+                await _oauthClient.GetAggregateDataAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -29,9 +28,9 @@ public class LeagueBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in league background service");
+                _logger.LogError(ex, "Error in aggregate background service");
                 // Continue with next cycle even if there's an error
-                await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
             }
         }
     }

@@ -19,7 +19,7 @@ public class RateLimiter
     /// <summary>
     /// Waits asynchronously until a request can be made within the rate limit.
     /// </summary>
-    public static async Task WaitAsync(CancellationToken cancellationToken = default)
+    public async Task WaitAsync(CancellationToken cancellationToken = default)
     {
         int delay;
         lock (_lock)
@@ -44,7 +44,7 @@ public class RateLimiter
     /// <summary>
     /// Updates the rate limit dynamically based on API response headers.
     /// </summary>
-    public static void UpdateRateLimits(int maxRequests, int windowSeconds)
+    public void UpdateRateLimits(int maxRequests, int windowSeconds)
     {
         lock (_lock)
         {

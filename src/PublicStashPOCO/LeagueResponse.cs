@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace FlippingExilesPublicStashAPI.LeaguePOCO;
+namespace FlippingExilesPublicStashAPI.PublicStashPOCO;
 
 public class LeagueResponse
 {

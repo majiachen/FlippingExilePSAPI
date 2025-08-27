@@ -1,5 +1,4 @@
 ﻿using Duende.IdentityModel.Client;
-using FlippingExilesPublicStashAPI.LeaguePOCO;
 using FlippingExilesPublicStashAPI.Oauth;
 using FlippingExilesPublicStashAPI.PublicStashPOCO;
 using FlippingExilesPublicStashAPI.Redis;
@@ -19,8 +18,14 @@ public class OAuthTokenClient
     private readonly RedisMessage _redisMessage;
     private string changeId;
     private readonly ItemFilter _itemFilter;
-    private readonly TimeSpan _cacheExpiry = TimeSpan.FromDays(1);
+    private readonly TimeSpan _leagueCacheExpiry = TimeSpan.FromDays(1);
+    private readonly TimeSpan _aggregateCacheExpiry = TimeSpan.FromHours(1);
 
+    
+    // Create separate rate limiters for each API endpoint
+    private readonly RateLimiter _publicStashRateLimiter;
+    private readonly RateLimiter _leaguesRateLimiter;
+    private readonly RateLimiter _aggregateRateLimiter;
 
     public OAuthTokenClient(HttpClient httpClient, string tokenUrl, string clientId, string clientSecret, ILogger<OAuthTokenClient> logger, RedisMessage redisMessage, ItemFilter itemFilter)
     {
@@ -31,14 +36,20 @@ public class OAuthTokenClient
         _logger = logger;
         _redisMessage = redisMessage;
         _itemFilter = itemFilter;
+        
+        // Initialize separate rate limiters for each API endpoint
+        _publicStashRateLimiter = new RateLimiter(logger); 
+        _leaguesRateLimiter = new RateLimiter(logger);     
+        _aggregateRateLimiter = new RateLimiter(logger);  
     }
     
-    private async Task<HttpResponseMessage> MakeApiRequestAsync(string apiUrl, Dictionary<string, string> parameters, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> MakeApiRequestAsync(string apiUrl, Dictionary<string, string> parameters, CancellationToken cancellationToken, RateLimiter rateLimiter)
     {
         if (string.IsNullOrEmpty(_accessToken))
         {
             await SetAccessTokenAsync(cancellationToken);
         }
+        await rateLimiter.WaitAsync(cancellationToken);
 
         string requestUri = QueryHelpers.AddQueryString(apiUrl, parameters);
         
@@ -53,7 +64,7 @@ public class OAuthTokenClient
     {
         if (response.IsSuccessStatusCode)
         {
-            UpdateRateLimit(response);
+            UpdateRateLimit(response, _publicStashRateLimiter);
             
             using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
             using (var reader = new StreamReader(stream))
@@ -92,7 +103,7 @@ public class OAuthTokenClient
     {
         if (response.IsSuccessStatusCode)
         {
-            UpdateRateLimit(response);
+            UpdateRateLimit(response, _leaguesRateLimiter);
             
             using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
             using (var reader = new StreamReader(stream))
@@ -107,8 +118,49 @@ public class OAuthTokenClient
                 
                 _logger.LogInformation("league Updated: " + leagueResponse);
                 var serializedData = JsonConvert.SerializeObject(leagueResponse);
-                LeagueHelper.LeaguesList = leagueResponse;
-                _redisMessage.SetMessage(RedisMessageKeyHelper.GetLeagueNameRedisKey(), serializedData, _cacheExpiry);
+                POCOHelper.LeaguesList = leagueResponse;
+                _redisMessage.SetMessage(RedisMessageKeyHelper.GetLeagueNameRedisKey(), serializedData, _leagueCacheExpiry);
+                
+            }
+
+            return "Stream league processing completed.";
+        }
+        else
+        {
+            string errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
+
+            throw new ApiException(response.StatusCode, errorResponse);
+        }
+    }
+    
+    private async Task<string> ProcessCXApiResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
+            using (var reader = new StreamReader(stream))
+            using (var jsonReader = new JsonTextReader(reader))
+            {
+                var serializer = new JsonSerializer
+                {
+                    NullValueHandling = NullValueHandling.Ignore,
+                    MissingMemberHandling = MissingMemberHandling.Ignore
+                };
+                var leagueMarketData = serializer.Deserialize<LeagueMarketData>(jsonReader);
+                if (IsEpochWithinCurrentHour(leagueMarketData.next_change_id))
+                {
+                    UpdateRateLimit(response, _aggregateRateLimiter);
+
+                }
+                _redisMessage.SetMessage(leagueMarketData.next_change_id.ToString(),RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
+                
+
+                _logger.LogInformation("CX Api Updated: " + leagueMarketData);
+                var serializedData = JsonConvert.SerializeObject(leagueMarketData);
+                POCOHelper.MarketData = leagueMarketData;
+                _redisMessage.SetMessage(RedisMessageKeyHelper.GetCXApiRedisKey(), serializedData, _leagueCacheExpiry);
                 
             }
 
@@ -136,7 +188,7 @@ public class OAuthTokenClient
                 ["id"] = changeId
             };
 
-            var response = await MakeApiRequestAsync("https://api.pathofexile.com/public-stash-tabs", parameters, cancellationToken);
+            var response = await MakeApiRequestAsync("https://api.pathofexile.com/public-stash-tabs", parameters, cancellationToken, _publicStashRateLimiter);
             
             return await ProcessStashResponseAsync(response, cancellationToken);
         }
@@ -160,7 +212,7 @@ public class OAuthTokenClient
             if (!string.IsNullOrEmpty(cachedData))
             {
                 var leagueResponse = JsonConvert.DeserializeObject<List<League>>(cachedData);
-                LeagueHelper.LeaguesList = leagueResponse;
+                POCOHelper.LeaguesList = leagueResponse;
                 _logger.LogInformation("Returning cached league data.");
                 return "Cached league data returned.";
             }
@@ -169,10 +221,47 @@ public class OAuthTokenClient
             {
                 ["type"] = "main"
             };
-            var response = await MakeApiRequestAsync("https://api.pathofexile.com/leagues", parameters, cancellationToken);
+            var response = await MakeApiRequestAsync("https://api.pathofexile.com/leagues", parameters, cancellationToken, _leaguesRateLimiter);
             
             return await ProcessLeagueResponseAsync(response, cancellationToken);
         }
+        catch (ApiException ex)
+        {
+            _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
+            throw;
+        }
+    }
+    
+    public async Task<string> GetAggregateDataAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cachedData = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiRedisKey());
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                var leagueResponse = JsonConvert.DeserializeObject<List<League>>(cachedData);
+                POCOHelper.LeaguesList = leagueResponse;
+                _logger.LogInformation("Returning cached league data.");
+                return "Cached league data returned.";
+
+            }else{
+                var cxApiChangeID = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
+
+                var parameters = new Dictionary<string, string>()
+                {
+                    ["id"] = cxApiChangeID,
+                };
+                var response = await MakeApiRequestAsync("https://api.pathofexile.com/currency-exchange", parameters,
+                    cancellationToken, _aggregateRateLimiter);
+
+                return await ProcessCXApiResponseAsync(response, cancellationToken);
+            }
+    }
         catch (ApiException ex)
         {
             _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
@@ -193,7 +282,7 @@ public class OAuthTokenClient
             Address = _tokenUrl,
             ClientId = _clientId,
             ClientSecret = _clientSecret,
-            Scope = "service:psapi service:leagues" // Specify the required scope
+            Scope = "service:psapi service:leagues service:cxapi" // Specify the required scope
         }, cancellationToken);
 
         if (tokenResponse.IsError)
@@ -207,7 +296,7 @@ public class OAuthTokenClient
         return tokenResponse;
     }
     
-    private void UpdateRateLimit(HttpResponseMessage response)
+    private void UpdateRateLimit(HttpResponseMessage response, RateLimiter rateLimiter)
     {
         if (response.Headers.TryGetValues("X-Rate-Limit-Ip", out var limitValues))
         {
@@ -215,10 +304,16 @@ public class OAuthTokenClient
             int maxRequests = limitParts[0]; // Max requests
             int windowSeconds = limitParts[1]; // Time window
 
-            RateLimiter.UpdateRateLimits(maxRequests, windowSeconds);
-            _logger.LogInformation("Rate limits updated: {MaxRequests} requests per {WindowSeconds} seconds", maxRequests, windowSeconds);
-
+            rateLimiter.UpdateRateLimits(maxRequests, windowSeconds);
+            _logger.LogInformation("Rate limits updated for endpoint: {MaxRequests} requests per {WindowSeconds} seconds", maxRequests, windowSeconds);
         }
     }
-
+    
+    public bool IsEpochWithinCurrentHour(long epochTimestamp)
+    {
+        long currentEpoch = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        long oneHourInSeconds = 3600;
+    
+        return epochTimestamp >= (currentEpoch - oneHourInSeconds) && epochTimestamp <= currentEpoch;
+    }
 }
