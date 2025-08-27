@@ -256,7 +256,7 @@ public class OAuthTokenClient
 
                 return await ProcessCXApiResponseAsync(response, cancellationToken);
             }
-    }
+        }
         catch (ApiException ex)
         {
             _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
