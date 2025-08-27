@@ -47,7 +47,7 @@ public enum RedisMessageKeyEnum
     [Description("FlippingExilesPublicStashAPI.CXApi")]
     CXApi,
     
-    [Description("FlippingExilesPublicStashAPI.CXApi")]
+    [Description("FlippingExilesPublicStashAPI.CXApiChangeId")]
     CXApiChangeID,
 }
 
