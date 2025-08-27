@@ -149,11 +149,6 @@ public class OAuthTokenClient
                     MissingMemberHandling = MissingMemberHandling.Ignore
                 };
                 var leagueMarketData = serializer.Deserialize<LeagueMarketData>(jsonReader);
-                if (IsEpochWithinCurrentHour(leagueMarketData.next_change_id))
-                {
-                    UpdateRateLimit(response, _aggregateRateLimiter);
-
-                }
                 _redisMessage.SetMessage(leagueMarketData.next_change_id.ToString(),RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
                 
 
@@ -241,16 +236,16 @@ public class OAuthTokenClient
     {
         try
         {
-            var cachedData = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiRedisKey());
-            if (!string.IsNullOrEmpty(cachedData))
+            var cxApiChangeID = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
+            var leagueMarketCache = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiRedisKey());
+            if (!string.IsNullOrEmpty(leagueMarketCache) && IsEpochWithinCurrentHour(Convert.ToInt64(cxApiChangeID)))
             {
-                var leagueResponse = JsonConvert.DeserializeObject<List<League>>(cachedData);
-                POCOHelper.LeaguesList = leagueResponse;
+                var leagueMarketData = JsonConvert.DeserializeObject<LeagueMarketData>(leagueMarketCache);
+                POCOHelper.MarketData = leagueMarketData;
                 _logger.LogInformation("Returning cached league data.");
                 return "Cached league data returned.";
 
             }else{
-                var cxApiChangeID = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
 
                 var parameters = new Dictionary<string, string>()
                 {
