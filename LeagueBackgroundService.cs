@@ -21,7 +21,6 @@ public class LeagueBackgroundService : BackgroundService
             try
             {
                 await _oauthClient.GetLeaguesAsync(stoppingToken);
-                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
             }
             catch (OperationCanceledException)
             {

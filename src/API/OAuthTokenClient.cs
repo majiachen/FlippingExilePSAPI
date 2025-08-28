@@ -268,6 +268,7 @@ public class OAuthTokenClient
     {
         if (response.IsSuccessStatusCode)
         {
+            UpdateRateLimit(response, _aggregateRateLimiter);
             using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
             using (var reader = new StreamReader(stream))
             using (var jsonReader = new JsonTextReader(reader))
