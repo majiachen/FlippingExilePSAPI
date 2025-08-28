@@ -290,14 +290,11 @@ public class OAuthTokenClient
 
             return "Stream league processing completed.";
         }
-        else
-        {
-            string errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+        var errorResponse = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
+        _logger.LogError("API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", response.StatusCode, errorResponse);
 
-            throw new ApiException(response.StatusCode, errorResponse);
-        }
+        throw new ApiException(response.StatusCode, errorResponse);
     }
     
     private void UpdateRateLimit(HttpResponseMessage response, RateLimiter rateLimiter)
