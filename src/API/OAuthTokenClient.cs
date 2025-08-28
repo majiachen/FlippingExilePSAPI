@@ -43,6 +43,128 @@ public class OAuthTokenClient
         _aggregateRateLimiter = new RateLimiter(logger);  
     }
     
+    private async Task<TokenResponse> SetAccessTokenAsync(CancellationToken cancellationToken = default)
+    {
+        // Use IdentityModel to request a token
+        var tokenResponse = await _httpClient.RequestClientCredentialsTokenAsync(new ClientCredentialsTokenRequest
+        {
+            Address = _tokenUrl,
+            ClientId = _clientId,
+            ClientSecret = _clientSecret,
+            Scope = "service:psapi service:leagues service:cxapi" // Specify the required scope
+        }, cancellationToken);
+
+        if (tokenResponse.IsError)
+        {
+            _logger.LogError("Failed to acquire access token. Error: {Error}", tokenResponse.Error);
+            throw new Exception($"Failed to acquire access token: {tokenResponse.Error}");
+        }
+
+        _logger.LogInformation("Access token acquired successfully.");
+        _accessToken = tokenResponse.AccessToken;
+        return tokenResponse;
+    }
+    
+    public async Task<string> GetPublicStashesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            changeId = _redisMessage.GetMessage(RedisMessageKeyHelper.GetChangeIdRedisKey());
+            _logger.LogInformation("changed ID Acquired: " + changeId);
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["id"] = changeId
+            };
+
+            var response = await MakeApiRequestAsync("https://api.pathofexile.com/public-stash-tabs", parameters, cancellationToken, _publicStashRateLimiter);
+            
+            return await ProcessStashResponseAsync(response, cancellationToken);
+        }
+        catch (ApiException ex)
+        {
+            _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
+            throw;
+        }
+    }
+
+    public async Task<string> GetLeaguesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cachedData = _redisMessage.GetMessage(RedisMessageKeyHelper.GetLeagueNameRedisKey());
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                var leagueResponse = JsonConvert.DeserializeObject<List<League>>(cachedData);
+                POCOHelper.LeaguesList = leagueResponse;
+                _logger.LogInformation("Returning cached league data.");
+                return "Cached league data returned.";
+            }
+
+            var parameters = new Dictionary<string, string>()
+            {
+                ["type"] = "main"
+            };
+            var response = await MakeApiRequestAsync("https://api.pathofexile.com/leagues", parameters, cancellationToken, _leaguesRateLimiter);
+            
+            return await ProcessLeagueResponseAsync(response, cancellationToken);
+        }
+        catch (ApiException ex)
+        {
+            _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
+            throw;
+        }
+    }
+    
+    public async Task<string> GetAggregateDataAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var cxApiChangeID = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
+            var leagueMarketCache = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiRedisKey());
+            if (!string.IsNullOrEmpty(leagueMarketCache) && IsEpochWithinCurrentHour(Convert.ToInt64(cxApiChangeID)))
+            {
+                var leagueMarketData = JsonConvert.DeserializeObject<LeagueMarketData>(leagueMarketCache);
+                POCOHelper.MarketData = leagueMarketData;
+                _logger.LogInformation("Returning cached league data.");
+                return "Cached league data returned.";
+
+            }else{
+
+                // Remove the parameters dictionary since we're using path parameter
+                // var parameters = new Dictionary<string, string>()
+                // {
+                //     ["id"] = "1722031200"//cxApiChangeID,
+                // };
+                // Use cxApiChangeID as part of the URL path
+                var apiUrl = $"https://api.pathofexile.com/currency-exchange/{cxApiChangeID}";
+                var response = await MakeApiRequestAsync(apiUrl, null, cancellationToken, _aggregateRateLimiter);
+
+                return await ProcessCXApiResponseAsync(response, cancellationToken);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
+            throw;
+        }
+    }
+    
     private async Task<HttpResponseMessage> MakeApiRequestAsync(string apiUrl, Dictionary<string, string> parameters, CancellationToken cancellationToken, RateLimiter rateLimiter)
     {
         if (string.IsNullOrEmpty(_accessToken))
@@ -51,8 +173,15 @@ public class OAuthTokenClient
         }
         await rateLimiter.WaitAsync(cancellationToken);
 
-        string requestUri = QueryHelpers.AddQueryString(apiUrl, parameters);
-        
+        string requestUri;
+        if (parameters!=null && parameters.Count>0)
+        {
+            requestUri = QueryHelpers.AddQueryString(apiUrl, parameters);
+        }
+        else
+        {
+            requestUri = apiUrl;
+        }
         var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
         request.Headers.Add("User-Agent", "OAuth flippingexiles/1.0 (contact: jackma790@gmail.com)");
@@ -149,7 +278,7 @@ public class OAuthTokenClient
                     MissingMemberHandling = MissingMemberHandling.Ignore
                 };
                 var leagueMarketData = serializer.Deserialize<LeagueMarketData>(jsonReader);
-                _redisMessage.SetMessage(leagueMarketData.next_change_id.ToString(),RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
+                _redisMessage.SetMessage(RedisMessageKeyHelper.GetCXApiChangeIDRedisKey(),leagueMarketData.next_change_id.ToString());
                 
 
                 _logger.LogInformation("CX Api Updated: " + leagueMarketData);
@@ -169,126 +298,6 @@ public class OAuthTokenClient
 
             throw new ApiException(response.StatusCode, errorResponse);
         }
-    }
-
-    public async Task<string> GetPublicStashesAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            changeId = _redisMessage.GetMessage(RedisMessageKeyHelper.GetChangeIdRedisKey());
-            _logger.LogInformation("changed ID Acquired: " + changeId);
-
-            var parameters = new Dictionary<string, string>
-            {
-                ["id"] = changeId
-            };
-
-            var response = await MakeApiRequestAsync("https://api.pathofexile.com/public-stash-tabs", parameters, cancellationToken, _publicStashRateLimiter);
-            
-            return await ProcessStashResponseAsync(response, cancellationToken);
-        }
-        catch (ApiException ex)
-        {
-            _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
-            throw;
-        }
-    }
-
-    public async Task<string> GetLeaguesAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var cachedData = _redisMessage.GetMessage(RedisMessageKeyHelper.GetLeagueNameRedisKey());
-            if (!string.IsNullOrEmpty(cachedData))
-            {
-                var leagueResponse = JsonConvert.DeserializeObject<List<League>>(cachedData);
-                POCOHelper.LeaguesList = leagueResponse;
-                _logger.LogInformation("Returning cached league data.");
-                return "Cached league data returned.";
-            }
-
-            var parameters = new Dictionary<string, string>()
-            {
-                ["type"] = "main"
-            };
-            var response = await MakeApiRequestAsync("https://api.pathofexile.com/leagues", parameters, cancellationToken, _leaguesRateLimiter);
-            
-            return await ProcessLeagueResponseAsync(response, cancellationToken);
-        }
-        catch (ApiException ex)
-        {
-            _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
-            throw;
-        }
-    }
-    
-    public async Task<string> GetAggregateDataAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var cxApiChangeID = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiChangeIDRedisKey());
-            var leagueMarketCache = _redisMessage.GetMessage(RedisMessageKeyHelper.GetCXApiRedisKey());
-            if (!string.IsNullOrEmpty(leagueMarketCache) && IsEpochWithinCurrentHour(Convert.ToInt64(cxApiChangeID)))
-            {
-                var leagueMarketData = JsonConvert.DeserializeObject<LeagueMarketData>(leagueMarketCache);
-                POCOHelper.MarketData = leagueMarketData;
-                _logger.LogInformation("Returning cached league data.");
-                return "Cached league data returned.";
-
-            }else{
-
-                var parameters = new Dictionary<string, string>()
-                {
-                    ["id"] = cxApiChangeID,
-                };
-                var response = await MakeApiRequestAsync("https://api.pathofexile.com/currency-exchange", parameters,
-                    cancellationToken, _aggregateRateLimiter);
-
-                return await ProcessCXApiResponseAsync(response, cancellationToken);
-            }
-        }
-        catch (ApiException ex)
-        {
-            _logger.LogError(ex, "API request failed. Status Code: {StatusCode}. Error Response: {ErrorResponse}", ex.StatusCode, ex.ErrorResponse);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "An unexpected error occurred: {ErrorMessage}", ex.Message);
-            throw;
-        }
-    }
-
-    private async Task<TokenResponse> SetAccessTokenAsync(CancellationToken cancellationToken = default)
-    {
-        // Use IdentityModel to request a token
-        var tokenResponse = await _httpClient.RequestClientCredentialsTokenAsync(new ClientCredentialsTokenRequest
-        {
-            Address = _tokenUrl,
-            ClientId = _clientId,
-            ClientSecret = _clientSecret,
-            Scope = "service:psapi service:leagues service:cxapi" // Specify the required scope
-        }, cancellationToken);
-
-        if (tokenResponse.IsError)
-        {
-            _logger.LogError("Failed to acquire access token. Error: {Error}", tokenResponse.Error);
-            throw new Exception($"Failed to acquire access token: {tokenResponse.Error}");
-        }
-
-        _logger.LogInformation("Access token acquired successfully.");
-        _accessToken = tokenResponse.AccessToken;
-        return tokenResponse;
     }
     
     private void UpdateRateLimit(HttpResponseMessage response, RateLimiter rateLimiter)
