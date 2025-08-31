@@ -60,8 +60,9 @@ public class TradeListHandler
 
             _logger.LogInformation($"Found {filteredItems.Count} {enumDescription} items in stash {stash.Id}");
 
-            // 1. Remove existing items of this type from the stash
-            await RemoveStashItemsFromTypeAsync(stash.Id, typeKey);
+            currencySuffixList.ForEach(async suffix =>
+                await RemoveStashItemsFromTypeAsync(stash.Id, typeKey + $":{suffix}"));
+
 
             // 2. Add new items
             for (var i = 0; i < filteredItems.Count; i++)
@@ -79,17 +80,22 @@ public class TradeListHandler
                     item.BaseType,
                     item.TypeLine
                 };
-
+                var priceDenomination = currencySuffixList.FirstOrDefault(suffix =>
+                    item.Note.Contains(suffix, StringComparison.OrdinalIgnoreCase));
+                var typeKeyWithCurrency = typeKey + $":{priceDenomination}";
                 var itemJson = JsonConvert.SerializeObject(itemData);
-                await _redisMessage.HashSetAsync(typeKey, fieldName, itemJson);
+                await _redisMessage.HashSetAsync(typeKeyWithCurrency, fieldName, itemJson);
+
+
+                // 3. Update counters and indexes
+                await _redisMessage.HashSetAsync($"{typeKeyWithCurrency}:count", $"stash:{stash.Id}",
+                    filteredItems.Count.ToString());
+                await _redisMessage.SetAddAsync("item:types", typeKeyWithCurrency);
+                await _redisMessage.SetAddAsync($"stash:{stash.Id}:types", typeKeyWithCurrency);
+
+                _logger.LogInformation(
+                    $"Added {filteredItems.Count} items to {typeKeyWithCurrency} for stash {stash.Id}");
             }
-
-            // 3. Update counters and indexes
-            await _redisMessage.HashSetAsync($"{typeKey}:count", $"stash:{stash.Id}", filteredItems.Count.ToString());
-            await _redisMessage.SetAddAsync("item:types", typeKey);
-            await _redisMessage.SetAddAsync($"stash:{stash.Id}:types", typeKey);
-
-            _logger.LogInformation($"Added {filteredItems.Count} items to {typeKey} for stash {stash.Id}");
         }
     }
 
@@ -114,7 +120,6 @@ public class TradeListHandler
         if (stashFields.Any())
             await _redisMessage.HashDeleteAsync(typeKey, stashFields.Select(f => f.ToString()).ToArray());
 
-        // Reset count
         await _redisMessage.HashDeleteAsync($"{typeKey}:count", $"stash:{stashId}");
     }
 
