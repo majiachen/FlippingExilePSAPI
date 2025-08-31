@@ -1,100 +1,151 @@
-﻿using FlippingExilesPublicStashAPI.PublicStashPOCO;
+﻿using System.Text.RegularExpressions;
+using FlippingExilesPublicStashAPI.PublicStashPOCO;
 using Newtonsoft.Json;
 
 namespace FlippingExilesPublicStashAPI.Redis;
 
 public class TradeListHandler
 {
-        
     private readonly ILogger<TradeListHandler> _logger;
     private readonly RedisMessage _redisMessage;
-        
+
     public TradeListHandler(ILogger<TradeListHandler> logger, RedisMessage redisMessage)
     {
         _logger = logger;
         _redisMessage = redisMessage;
     }
 
-    public void SetEssenceMessage(List<Item> essenceItems, Stash stash)
+    public async Task SetEssenceMessage(List<Item> essenceItems, Stash stash)
     {
-        ProcessItems(essenceItems, stash, POCOHelper.EssenceEnumsList);
+        await ProcessItems(essenceItems, stash, POCOHelper.EssenceEnumsList);
     }
 
-    public void SetFossilMessage(List<Item> fossilItems, Stash stash)
+    public async Task SetFossilMessage(List<Item> fossilItems, Stash stash)
     {
-        ProcessItems(fossilItems, stash, POCOHelper.FossilEnumsList);
-    }
-    
-    public void SetScarabMessage(List<Item> scarabItems, Stash stash)
-    {
-        ProcessItems(scarabItems, stash, POCOHelper.ScarabEnumsList);
-    }
-    
-    public void SetOilMessage(List<Item> scarabItems, Stash stash)
-    {
-        ProcessItems(scarabItems, stash, POCOHelper.OilEnumsList);
+        await ProcessItems(fossilItems, stash, POCOHelper.FossilEnumsList);
     }
 
-    private void ProcessItems(List<Item> items, Stash stash, IEnumerable<Enum> enumList)
+    public async Task SetScarabMessage(List<Item> scarabItems, Stash stash)
     {
-        // Get the account and stash information
-        var accountAndStashMap = new AccountAndStashMap
-        {
-            AccountName = stash.AccountName,
-            StashId = stash.Id
-        };
-        List<string> currencySuffixList = POCOHelper.GetAllDescriptions<CurrencySuffixEnum>();
+        await ProcessItems(scarabItems, stash, POCOHelper.ScarabEnumsList);
+    }
 
+    public async Task SetOilMessage(List<Item> scarabItems, Stash stash)
+    {
+        await ProcessItems(scarabItems, stash, POCOHelper.OilEnumsList);
+    }
+
+    private async Task ProcessItems(List<Item> items, Stash stash, IEnumerable<Enum> enumList)
+    {
         var enumValues = enumList.ToList();
+        var category = GetCategoryFromEnumList(enumValues);
+        var currencySuffixList = POCOHelper.GetAllDescriptions<CurrencySuffixEnum>();
+
         foreach (var enumValue in enumValues)
         {
-            // Get the description of the current enum value
             var enumDescription = enumValue.GetDescription();
-            
-            // Filter items that have BaseType matching the enum description
-            var filteredItems = items.Where(item => 
-                item.Note != null && 
-                item.BaseType != null &&
-                item.BaseType.Contains(enumDescription, StringComparison.CurrentCultureIgnoreCase)
+            var slug = Slugify(enumDescription);
+            var typeKey = $"type:{category}:{slug}";
+
+            var filteredItems = items.Where(item =>
+                item.Note != null &&
+                (item.TypeLine?.Contains(enumDescription, StringComparison.OrdinalIgnoreCase) == true ||
+                 item.BaseType?.Contains(enumDescription, StringComparison.OrdinalIgnoreCase) == true) &&
+                currencySuffixList.Any(suffix =>
+                    item.Note.Contains(suffix, StringComparison.OrdinalIgnoreCase))
             ).ToList();
 
-            // Process the filtered items for this specific enum value
-            if (filteredItems.Count == 0) continue;
-            
-            // For each item, find which currency suffix it contains and create a key accordingly
-            foreach (var item in filteredItems)
-            {
-                var matchingCurrencySuffix = currencySuffixList.FirstOrDefault(suffix => 
-                    item.Note.Contains(suffix, StringComparison.CurrentCultureIgnoreCase));
-            
-                if (matchingCurrencySuffix == null) continue;
-            
-                _logger.LogInformation("Item found, processing then adding to list: " + string.Join(";",filteredItems.Select(item => item.ToString())));
 
-                accountAndStashMap.Item = new List<Item> { item };
-            
-                var redisMessageKey = ConfigureRedisKey(enumValue.GetDescription(), matchingCurrencySuffix, enumValues, stash);
-                var listOfAccountAndStashMapFromRedis = GetExistingRedisData(redisMessageKey);
-            
-                listOfAccountAndStashMapFromRedis.RemoveAll(map => map.StashId == stash.Id);
-            
-                listOfAccountAndStashMapFromRedis.Add(accountAndStashMap);
-            
-                _redisMessage.SetMessage(redisMessageKey, JsonConvert.SerializeObject(listOfAccountAndStashMapFromRedis));
-                _logger.LogInformation("Trade list updated in redis: " + listOfAccountAndStashMapFromRedis);
+            if (filteredItems.Count == 0) continue;
+
+            _logger.LogInformation($"Found {filteredItems.Count} {enumDescription} items in stash {stash.Id}");
+
+            // 1. Remove existing items of this type from the stash
+            await RemoveStashItemsFromTypeAsync(stash.Id, typeKey);
+
+            // 2. Add new items
+            for (var i = 0; i < filteredItems.Count; i++)
+            {
+                var item = filteredItems[i];
+                var fieldName = $"stash:{stash.Id}:{i}";
+
+                var itemData = new
+                {
+                    item.Note,
+                    item.StackSize,
+                    stash.AccountName,
+                    stash.League,
+                    LastUpdated = DateTime.UtcNow,
+                    item.BaseType,
+                    item.TypeLine
+                };
+
+                var itemJson = JsonConvert.SerializeObject(itemData);
+                await _redisMessage.HashSetAsync(typeKey, fieldName, itemJson);
             }
+
+            // 3. Update counters and indexes
+            await _redisMessage.HashSetAsync($"{typeKey}:count", $"stash:{stash.Id}", filteredItems.Count.ToString());
+            await _redisMessage.SetAddAsync("item:types", typeKey);
+            await _redisMessage.SetAddAsync($"stash:{stash.Id}:types", typeKey);
+
+            _logger.LogInformation($"Added {filteredItems.Count} items to {typeKey} for stash {stash.Id}");
         }
     }
 
+    public async Task RemoveStashIfExist(string stashId)
+    {
+        var stashTypeSetLength = await _redisMessage.SetLengthAsync($"stash:{stashId}:types");
+        if (stashTypeSetLength > 0)
+        {
+            var stashTypes = await _redisMessage.SetMembersAsync($"stash:{stashId}:types");
+            foreach (var type in stashTypes) await RemoveStashItemsFromTypeAsync(stashId, type.ToString());
+            await _redisMessage.KeyDeleteAsync($"stash:{stashId}:types");
+        }
+    }
+
+
+    private async Task RemoveStashItemsFromTypeAsync(string stashId, string typeKey)
+    {
+        // Get all fields for this stash in the type hash
+        var allFields = await _redisMessage.HashKeysAsync(typeKey);
+        var stashFields = allFields.Where(f => f.ToString().StartsWith($"stash:{stashId}:"));
+
+        if (stashFields.Any())
+            await _redisMessage.HashDeleteAsync(typeKey, stashFields.Select(f => f.ToString()).ToArray());
+
+        // Reset count
+        await _redisMessage.HashDeleteAsync($"{typeKey}:count", $"stash:{stashId}");
+    }
+
+    private static string GetCategoryFromEnumList(IEnumerable<Enum> enumList)
+    {
+        if (enumList.SequenceEqual(POCOHelper.FossilEnumsList)) return "fossil";
+        if (enumList.SequenceEqual(POCOHelper.EssenceEnumsList)) return "essence";
+        if (enumList.SequenceEqual(POCOHelper.ScarabEnumsList)) return "scarab";
+        if (enumList.SequenceEqual(POCOHelper.OilEnumsList)) return "oil";
+        return "unknown";
+    }
+
+    private static string Slugify(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        var lower = input.ToLowerInvariant();
+        // Replace any non-alphanumeric with underscore
+        var slug = Regex.Replace(lower, "[^a-z0-9]+", "_");
+        // Trim underscores
+        slug = slug.Trim('_');
+        return slug;
+    }
+
+    // Keeping the old methods in case of future use but currently not used
     private List<AccountAndStashMap> GetExistingRedisData(string redisMessageKey)
     {
         var listOfAccountAndStashMapFromRedis = new List<AccountAndStashMap>();
         var redisMessage = _redisMessage.GetMessage(redisMessageKey);
         if (redisMessage != null && redisMessage.Length > 0)
-        {
             listOfAccountAndStashMapFromRedis = JsonConvert.DeserializeObject<List<AccountAndStashMap>>(
                 _redisMessage.GetMessage(redisMessageKey));
-        }
         return listOfAccountAndStashMapFromRedis;
     }
 
@@ -102,27 +153,16 @@ public class TradeListHandler
         Stash stash)
     {
         string redisKey;
-        
-        // Determine which Redis key to use based on the enum list type
         if (enumList.SequenceEqual(POCOHelper.FossilEnumsList))
-        {
             redisKey = RedisMessageKeyHelper.GetFossilTradeListRedisKey();
-        }else if (enumList.SequenceEqual(POCOHelper.EssenceEnumsList))
-        {
+        else if (enumList.SequenceEqual(POCOHelper.EssenceEnumsList))
             redisKey = RedisMessageKeyHelper.GetEssenceTradeListRedisKey();
-        }else if (enumList.SequenceEqual(POCOHelper.ScarabEnumsList))
-        {
+        else if (enumList.SequenceEqual(POCOHelper.ScarabEnumsList))
             redisKey = RedisMessageKeyHelper.GetScarabTradeListRedisKey();
-        }else if (enumList.SequenceEqual(POCOHelper.OilEnumsList))
-        {
+        else if (enumList.SequenceEqual(POCOHelper.OilEnumsList))
             redisKey = RedisMessageKeyHelper.GetOilsTradeListRedisKey();
-        }else
-        {
-            // Default to essence key if unknown type
+        else
             redisKey = RedisMessageKeyHelper.GetUnkownTradeListRedisKey();
-        }
-        
-        return redisKey + "."+stash.League+"." + enumDescription.Replace(" ", "-") + "." + currencySuffix;
+        return redisKey + "." + stash.League + "." + enumDescription.Replace(" ", "-") + "." + currencySuffix;
     }
-        
 }

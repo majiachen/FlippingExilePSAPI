@@ -1,26 +1,25 @@
 ﻿// This would be in a separate file like AggregateBackgroundService.cs
-using Microsoft.Extensions.Hosting;
-using System.Threading.Tasks;
+
 using FlippingExilesPublicStashAPI.API;
 
 public class AggregateBackgroundService : BackgroundService
 {
-    private readonly OAuthTokenClient _oauthClient;
     private readonly ILogger<AggregateBackgroundService> _logger;
-    
+    private readonly OAuthTokenClient _oauthClient;
+
     public AggregateBackgroundService(OAuthTokenClient oauthClient, ILogger<AggregateBackgroundService> logger)
     {
         _oauthClient = oauthClient;
         _logger = logger;
     }
-    
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
-        {
             try
             {
                 await _oauthClient.GetAggregateDataAsync(stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -32,6 +31,5 @@ public class AggregateBackgroundService : BackgroundService
                 // Continue with next cycle even if there's an error
                 await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
             }
-        }
     }
 }
