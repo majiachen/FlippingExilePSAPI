@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PoE.Valuation.Core\PoE.Valuation.Core.csproj" />
+    <ProjectReference Include="..\PoE.Valuation.Infrastructure\PoE.Valuation.Infrastructure.csproj" />
+    <ProjectReference Include="..\PoE.Valuation.Contracts\PoE.Valuation.Contracts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>08c0c819-db62-49a6-9bfa-ec70ac981d40</UserSecretsId>
+  </PropertyGroup>
+
+</Project>
