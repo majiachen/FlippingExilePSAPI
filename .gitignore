@@ -425,3 +425,11 @@ FodyWeavers.xsd
 LICENSE
 README.md
 Thumbs.db
+
+# -----------------------------------------------------------------------------
+# Configuration files
+# Commit appsettings.json and appsettings.Development.json (they hold no real
+# secrets). Ignore any other environment-specific appsettings file, since those
+# may contain real credentials (prod/staging connection strings, OAuth secret...).
+**/appsettings.*.json
+!**/appsettings.Development.json

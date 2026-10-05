@@ -29,7 +29,7 @@ public sealed class ValuationApiFactory : WebApplicationFactory<Program>
                 ["OAuth:ClientSecret"] = "test-client-secret",
                 ["OAuth:RedirectUri"] = "https://localhost/oauth/callback",
                 ["Redis:ConnectionString"] = "localhost:6379,abortConnect=false",
-                ["Sql:ConnectionString"] = "Host=localhost;Port=5432;Database=poervaluationtest;Username=postgres;Password=postgres",
+                ["Sql:ConnectionString"] = "Host=localhost;Port=5432;Database=poevaluationtest;Username=postgres;Password=postgres",
                 ["Polling:Enabled"] = "false"
             });
         });

@@ -43,12 +43,12 @@ public class ConfigurationBindingTests
     {
         var config = BuildConfig(new Dictionary<string, string?>
         {
-            ["Sql:ConnectionString"] = "Host=localhost;Port=5432;Database=poervaluation;Username=postgres;Password=postgres"
+            ["Sql:ConnectionString"] = "Host=localhost;Port=5432;Database=poevaluation;Username=postgres;Password=postgres"
         });
 
         var options = config.GetSection(SqlOptions.SectionName).Get<SqlOptions>() ?? new SqlOptions();
 
-        Assert.Equal("Host=localhost;Port=5432;Database=poervaluation;Username=postgres;Password=postgres", options.ConnectionString);
+        Assert.Equal("Host=localhost;Port=5432;Database=poevaluation;Username=postgres;Password=postgres", options.ConnectionString);
     }
 
     [Fact]
