@@ -29,6 +29,8 @@ public static class ApiEndpoints
             if (await EnsureAuthorizedAsync(ctx, sessionService, rateLimiter, rateOptions.Value, "valuation") is { } rejected)
                 return rejected;
 
+            itemId = DecodeRouteValue(itemId);
+
             if (!ApiInputValidator.TryValidateItemId(itemId, out var error))
                 return BadInput(error);
             if (!string.IsNullOrEmpty(reference) && !ApiInputValidator.TryValidateItemId(reference, out error))
@@ -55,6 +57,9 @@ public static class ApiEndpoints
 
             if (!ApiInputValidator.TryParseHistoryRange(range, out var window, out var maxPoints, out var error))
                 return BadInput(error);
+
+            itemId = DecodeRouteValue(itemId);
+
             if (!ApiInputValidator.TryValidateItemId(itemId, out error))
                 return BadInput(error);
             if (!string.IsNullOrEmpty(reference) && !ApiInputValidator.TryValidateItemId(reference, out error))
@@ -135,6 +140,14 @@ public static class ApiEndpoints
 
     private static TimeSpan RateLimitWindow(RateLimitOptions options) =>
         TimeSpan.FromSeconds(Math.Max(1, options.DefaultWindowSeconds));
+
+    /// <summary>
+    /// Normalizes an item id taken from a route segment. Kestrel leaves <c>%2F</c> encoded in the
+    /// matched path, so a PoE metadata path (<c>Metadata/Items/Currency/...</c>) passed as
+    /// <c>{itemId}</c> arrives percent-encoded while the same value in a query string arrives
+    /// decoded. Both must reach the store in the decoded form the snapshots are keyed by.
+    /// </summary>
+    private static string DecodeRouteValue(string value) => Uri.UnescapeDataString(value);
 
     private static IResult BadInput(string? error) =>
         Results.Problem(title: "Invalid input", detail: error, statusCode: 400);

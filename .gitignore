@@ -433,3 +433,6 @@ Thumbs.db
 # may contain real credentials (prod/staging connection strings, OAuth secret...).
 **/appsettings.*.json
 !**/appsettings.Development.json
+# Ad-hoc test output dumps
+test_output.txt
+testout.txt

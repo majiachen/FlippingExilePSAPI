@@ -109,12 +109,19 @@ public sealed class PostgresMarketValuationStore : IMarketValuationStore
 
         return new ValuationPoint(
             row.MarketId,
-            row.SnapshotHourUtc,
+            // Npgsql materializes a `timestamptz` column as System.DateTime (Kind=Utc), never as
+            // DateTimeOffset, so Dapper can only materialize SnapshotRow when the record declares
+            // DateTime. The instant is converted back here.
+            ToUtcOffset(row.SnapshotHourUtc),
             ValuationRate.ReferencePerItem(digest.LowestRatio, itemId, reference),
             ValuationRate.ReferencePerItem(digest.HighestRatio, itemId, reference),
             digest.VolumeTraded.TryGetValue(itemId, out var itemVolume) ? itemVolume : null,
             digest.VolumeTraded.TryGetValue(reference, out var referenceVolume) ? referenceVolume : null);
     }
 
-    private sealed record SnapshotRow(string MarketId, DateTimeOffset SnapshotHourUtc, string MetricsJson);
+    /// <summary>Rebuilds the UTC offset for a <c>timestamptz</c> value read as a <see cref="DateTime"/>.</summary>
+    private static DateTimeOffset ToUtcOffset(DateTime value) =>
+        new(value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime(), TimeSpan.Zero);
+
+    private sealed record SnapshotRow(string MarketId, DateTime SnapshotHourUtc, string MetricsJson);
 }
