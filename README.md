@@ -42,6 +42,20 @@ redacted from all log output via `SensitiveValueStore`/`LogSanitizer`.
 dotnet run --project src/PoE.Valuation.Api/PoE.Valuation.Api.csproj
 ```
 
+## Deployment (Docker / UnRAID)
+
+Publish the API and the frontend behind **one HTTPS origin** (SWAG / Nginx Proxy Manager / Traefik):
+the API sets no CORS and its session cookie is `Secure`, so plain `http://` hosting silently breaks
+login and every `/api/*` call answers `401`. Kestrel runs as `http://+:8080` inside the docker network
+and the proxy terminates TLS.
+
+The container exits at startup unless these are set: `OAuth__ClientId`, `OAuth__ClientSecret`,
+`OAuth__RedirectUri` (the **published** `https://<host>/auth/callback`, registered character-for-character
+in the GGG developer portal), `Redis__ConnectionString` and `Sql__ConnectionString`. Apply
+`db/schema.sql` to the Postgres container once. Run a single API replica.
+
+Full topology, compose example, proxy rules and volumes: **`docs/FRONTEND_API.md`, section 12**.
+
 ## Authentication
 
 Login is the PKCE flow: `GET /auth/login` redirects to PoeTrade, which redirects back to the
@@ -81,6 +95,9 @@ periods removed, every other separator collapsed to a single space), so `Jewelle
 `jewellers orb` and `Jewellers  Orb` all resolve to the same item.
 
 ## API surface
+
+Frontend-facing contract (request/response shapes, error contract, rate limits, TypeScript client):
+**[`docs/FRONTEND_API.md`](docs/FRONTEND_API.md)**.
 
 | Route | Purpose |
 | --- | --- |

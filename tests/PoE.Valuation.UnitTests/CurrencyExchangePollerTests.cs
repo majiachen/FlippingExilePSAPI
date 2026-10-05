@@ -16,6 +16,10 @@ namespace PoE.Valuation.UnitTests;
 /// hour), but the commit's optimistic CAS must still compare against the value actually read from
 /// the database — null on first run. Passing the seed value instead made the first commit conflict
 /// with itself and roll back forever.
+/// <para>
+/// Also covers the storage filter: only market pairs whose either side is a tracked reference
+/// currency (Chaos Orb / Divine Orb) are committed; every other pair in the digest is dropped.
+/// </para>
 /// </summary>
 public class CurrencyExchangePollerTests
 {
@@ -24,6 +28,12 @@ public class CurrencyExchangePollerTests
     private static readonly DateTimeOffset Hour10 = new(2026, 9, 27, 10, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Hour11 = new(2026, 9, 27, 11, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Hour12 = new(2026, 9, 27, 12, 0, 0, TimeSpan.Zero);
+
+    // The two tracked reference currencies, plus a pair that is neither.
+    private const string Chaos = TrackedCurrencyMetadata.CurrencyRerollRare;
+    private const string Divine = TrackedCurrencyMetadata.CurrencyModValues;
+    private const string UntrackedA = "Metadata/Items/Currency/Currency";
+    private const string UntrackedB = "Metadata/Items/Currency/CurrencyRare";
 
     [Fact]
     public async Task FirstRun_WithNullStoredCursor_Commits_UsingNullAsExpectedCursor()
@@ -87,13 +97,33 @@ public class CurrencyExchangePollerTests
         Assert.Equal(1, handler.RequestCount); // no second fetch after the conflict
     }
 
+    [Fact]
+    public async Task NonTrackedPairs_AreFilteredOut()
+    {
+        var (poller, _, store) = CreatePoller(
+            storedCursor: Hour11.ToUnixTimeSeconds(), initialChangeIdUtc: Hour10, includeUntracked: true);
+
+        await poller.RunPollCycleAsync(CancellationToken.None, Now);
+
+        var commit = Assert.Single(store.Commits);
+
+        // The digest carried three markets (two tracked leagues plus one pair where neither side is
+        // tracked); only the two tracked ones are stored.
+        Assert.Equal(2, commit.Rows);
+        Assert.All(commit.Pairs, p =>
+            Assert.True(
+                p.CurrencyA == Chaos || p.CurrencyA == Divine || p.CurrencyB == Chaos || p.CurrencyB == Divine,
+                $"Committed pair {p.CurrencyA}|{p.CurrencyB} is not a tracked currency pair."));
+    }
+
     private static (CurrencyExchangePoller Poller, FakeDigestHandler Handler, FakeExchangeStore Store) CreatePoller(
         long? storedCursor,
         DateTimeOffset? initialChangeIdUtc,
-        bool commitSucceeds = true)
+        bool commitSucceeds = true,
+        bool includeUntracked = false)
     {
         var store = new FakeExchangeStore { StoredCursor = storedCursor, CommitSucceeds = commitSucceeds };
-        var handler = new FakeDigestHandler();
+        var handler = new FakeDigestHandler { IncludeUntracked = includeUntracked };
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://poe.test/currency-exchange/") };
         var options = Options.Create(new PollingOptions
         {
@@ -108,7 +138,7 @@ public class CurrencyExchangePollerTests
         return (poller, handler, store);
     }
 
-    private sealed record Commit(long? Expected, long New, int Rows);
+    private sealed record Commit(long? Expected, long New, int Rows, IReadOnlyList<(string CurrencyA, string CurrencyB)> Pairs);
 
     /// <summary>Stores each commit's CAS arguments and mirrors the database cursor on success.</summary>
     private sealed class FakeExchangeStore : ICurrencyExchangeStore
@@ -126,7 +156,8 @@ public class CurrencyExchangePollerTests
             long newCursor,
             CancellationToken cancellationToken = default)
         {
-            Commits.Add(new Commit(expectedCursor, newCursor, rows.Count));
+            var pairs = rows.Select(r => (r.CurrencyA, r.CurrencyB)).ToList();
+            Commits.Add(new Commit(expectedCursor, newCursor, rows.Count, pairs));
             if (CommitSucceeds)
                 StoredCursor = newCursor;
             return Task.FromResult(CommitSucceeds);
@@ -134,9 +165,10 @@ public class CurrencyExchangePollerTests
     }
 
     /// <summary>
-    /// Answers every <c>GET {changeId}</c> with a two-market digest whose
-    /// <c>next_change_id</c> is one hour after the requested id — mirroring the live API, where the
-    /// same <c>market_id</c> exists in multiple leagues.
+    /// Answers every <c>GET {changeId}</c> with a digest whose <c>next_change_id</c> is one hour after
+    /// the requested id — mirroring the live API, where the same <c>market_id</c> exists in multiple
+    /// leagues. The two default markets are tracked Chaos/Divine pairs; when
+    /// <see cref="IncludeUntracked"/> is set a third market whose pair is neither tracked is added.
     /// </summary>
     private sealed class FakeDigestHandler : HttpMessageHandler
     {
@@ -144,12 +176,8 @@ public class CurrencyExchangePollerTests
 
         public int RequestCount => _requestCount;
 
-        private const string PayloadTemplate = """
-            {"next_change_id": NEXT, "markets": [
-              {"league":"Standard","market_id":"a|b","market_pair":["a","b"],"volume_traded":{},"lowest_stock":{},"highest_stock":{},"lowest_ratio":{},"highest_ratio":{}},
-              {"league":"Hardcore","market_id":"a|b","market_pair":["a","b"],"volume_traded":{},"lowest_stock":{},"highest_stock":{},"lowest_ratio":{},"highest_ratio":{}}
-            ]}
-            """;
+        /// <summary>When true, each digest also carries a market pair that must be filtered out.</summary>
+        public bool IncludeUntracked { get; init; }
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
@@ -159,7 +187,18 @@ public class CurrencyExchangePollerTests
             // The client requests "{changeId}" relative to a base ending in ".../currency-exchange/",
             // so the requested hour is the final path segment.
             var changeId = long.Parse(request.RequestUri!.Segments.Last().Trim('/'));
-            var json = PayloadTemplate.Replace("NEXT", (changeId + CurrencyExchangeCursor.HourSeconds).ToString());
+            var nextChangeId = changeId + CurrencyExchangeCursor.HourSeconds;
+
+            var markets = new List<string>
+            {
+                Market("Standard", Chaos, Divine),
+                Market("Hardcore", Chaos, Divine),
+            };
+            if (IncludeUntracked)
+                markets.Add(Market("Standard", UntrackedA, UntrackedB));
+
+            var json = "{\"next_change_id\": " + nextChangeId +
+                       ", \"markets\": [" + string.Join(",", markets) + "]}";
 
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -168,5 +207,10 @@ public class CurrencyExchangePollerTests
             };
             return Task.FromResult(response);
         }
+
+        private static string Market(string league, string currencyA, string currencyB) =>
+            "{\"league\":\"" + league + "\",\"market_id\":\"" + currencyA + "|" + currencyB + "\"," +
+            "\"market_pair\":[\"" + currencyA + "\",\"" + currencyB + "\"]," +
+            "\"volume_traded\":{},\"lowest_stock\":{},\"highest_stock\":{},\"lowest_ratio\":{},\"highest_ratio\":{}}";
     }
 }

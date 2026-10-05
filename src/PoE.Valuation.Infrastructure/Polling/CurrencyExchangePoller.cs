@@ -106,7 +106,10 @@ public sealed class CurrencyExchangePoller : BackgroundService
                 return;
             }
 
+            // Only the tracked reference currencies are stored: a pair is kept when either side is
+            // Chaos Orb or Divine Orb, so the snapshot table does not fill with every digest pair.
             var rows = ok.Digest.Markets
+                .Where(m => TrackedCurrencyMetadata.IsTrackedPair(m.MarketPair.CurrencyA, m.MarketPair.CurrencyB))
                 .Select(m => new MarketSnapshotRow(
                     DateTimeOffset.FromUnixTimeSeconds(nextId),
                     m.League,
