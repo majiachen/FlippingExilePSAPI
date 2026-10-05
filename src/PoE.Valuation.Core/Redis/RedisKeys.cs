@@ -35,8 +35,12 @@ public static class RedisKeys
     public static string RateLimit(string sessionId, string endpoint) =>
         "ratelimit:" + ValidatePart(sessionId) + ":" + ValidatePart(endpoint);
 
-    /// <summary><c>league:{leagueName}</c> — cached PoE league name → league id mapping (the stash endpoint needs the numeric id). TTL: 24 h, set by the resolver.</summary>
+    /// <summary><c>league:{leagueName}</c> — cached PoE league name → league id mapping (the stash endpoint needs the league id). TTL: 24 h, set by the resolver.</summary>
     public static string LeagueMapping(string leagueName) => "league:" + ValidatePart(leagueName);
+
+    /// <summary><c>lock:item-catalog</c> — single-writer lock over the item catalogue refresh. TTL: 10 min, auto-renewed while held.</summary>
+    public const string ItemCatalogLockKey = "lock:item-catalog";
+
 
     /// <summary>Rejects empty parts and parts containing ':' or any control character so keys stay flat and unambiguous.</summary>
     private static string ValidatePart(string part)

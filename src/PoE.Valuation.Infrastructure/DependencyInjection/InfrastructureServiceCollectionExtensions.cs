@@ -33,6 +33,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IDbConnectionFactory, PostgresConnectionFactory>();
         services.AddSingleton<ICurrencyExchangeStore, CurrencyExchangeStore>();
         services.AddSingleton<IMarketValuationStore, PostgresMarketValuationStore>();
+        services.AddSingleton<IItemMetadataStore, PostgresItemMetadataStore>();
+
 
         // Redis: one long-lived ConnectionMultiplexer for the whole app — never one per request.
         // AbortOnConnectFail=false is required: when Redis is temporarily unavailable the
@@ -61,21 +63,33 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddHttpClient<PoeCurrencyExchangeClient>((sp, client) =>
         {
             var poeApi = sp.GetRequiredService<IOptions<PoEApiOptions>>().Value;
-            client.BaseAddress = new Uri(EnsureTrailingSlash(poeApi.CurrencyExchangeBaseUrl));
+            client.BaseAddress = new Uri(EnsureTrailingSlash(poeApi.CurrencyExchangeBaseUrl, nameof(PoEApiOptions.CurrencyExchangeBaseUrl)));
             client.Timeout = TimeSpan.FromSeconds(Math.Max(1, poeApi.RequestTimeoutSeconds));
             if (!string.IsNullOrWhiteSpace(poeApi.UserAgent))
                 client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", poeApi.UserAgent);
         });
 
-        // Typed HttpClient for the PoE REST API (leagues + stash). Base address is PathOfExile:ApiBaseUrl.
+        // Typed HttpClient for the PoE REST API (league list + stash). Base address is PathOfExile:ApiBaseUrl.
         services.AddHttpClient<PoeStashClient>((sp, client) =>
         {
             var poeApi = sp.GetRequiredService<IOptions<PoEApiOptions>>().Value;
-            client.BaseAddress = new Uri(EnsureTrailingSlash(poeApi.ApiBaseUrl));
+            client.BaseAddress = new Uri(EnsureTrailingSlash(poeApi.ApiBaseUrl, nameof(PoEApiOptions.ApiBaseUrl)));
             client.Timeout = TimeSpan.FromSeconds(Math.Max(1, poeApi.RequestTimeoutSeconds));
             if (!string.IsNullOrWhiteSpace(poeApi.UserAgent))
                 client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", poeApi.UserAgent);
         });
+
+        // Typed HttpClient for the public item catalogue (name -> metadata path). Base address is
+        // PathOfExile:TradeDataBaseUrl; the client requests the relative "static" path.
+        services.AddHttpClient<PoeItemCatalogClient>((sp, client) =>
+        {
+            var poeApi = sp.GetRequiredService<IOptions<PoEApiOptions>>().Value;
+            client.BaseAddress = new Uri(EnsureTrailingSlash(poeApi.TradeDataBaseUrl, nameof(PoEApiOptions.TradeDataBaseUrl)));
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(1, poeApi.RequestTimeoutSeconds));
+            if (!string.IsNullOrWhiteSpace(poeApi.UserAgent))
+                client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", poeApi.UserAgent);
+        });
+
 
         // Typed HttpClient for the OAuth token exchange. The token endpoint is an absolute URL
         // (OAuth:TokenEndpoint) passed per call, so no base address is set.
@@ -87,8 +101,12 @@ public static class InfrastructureServiceCollectionExtensions
                 client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", poeApi.UserAgent);
         });
 
-        // League name → numeric league id resolution, cached in Redis (see LeagueIdResolver).
+        // League name → league id resolution, cached in Redis (see LeagueIdResolver).
         services.AddSingleton<LeagueIdResolver>();
+
+        // Item catalogue (item name -> metadata path) refresh, guarded by the Redis refresh lock.
+        services.AddSingleton<ItemMetadataCatalogService>();
+
 
         // Session/auth orchestration (login, callback, logout, transparent token refresh). Scoped
         // because it depends on the transient PoeOAuthClient typed HTTP client.
@@ -97,11 +115,15 @@ public static class InfrastructureServiceCollectionExtensions
         // Background poller; no-ops when Polling:Enabled=false.
         services.AddHostedService<CurrencyExchangePoller>();
 
+        // Item catalogue refresher; no-ops when Polling:ItemCatalogEnabled=false.
+        services.AddHostedService<ItemMetadataCatalogRefresher>();
+
         return services;
     }
 
-    private static string EnsureTrailingSlash(string baseUrl) =>
+    private static string EnsureTrailingSlash(string baseUrl, string settingName) =>
         string.IsNullOrWhiteSpace(baseUrl)
-            ? throw new InvalidOperationException($"{PoEApiOptions.SectionName}:CurrencyExchangeBaseUrl is empty.")
+            ? throw new InvalidOperationException($"{PoEApiOptions.SectionName}:{settingName} is empty.")
             : baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/";
 }
+

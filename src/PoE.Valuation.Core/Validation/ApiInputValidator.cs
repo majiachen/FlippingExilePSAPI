@@ -44,8 +44,12 @@ public static class ApiInputValidator
     }
 
     /// <summary>
-    /// Validates a league name: 1..<see cref="MaxLeagueNameLength"/> alphanumeric characters.
-    /// PoE league names (Standard, CSS9Standard, ...) contain letters and digits only.
+    /// Validates a league name. PoE league ids are the league name itself and include spaces,
+    /// hyphens and parentheses — <c>Standard</c>, <c>CSS9Standard</c>, <c>Solo Self-Found</c>,
+    /// <c>Hardcore SSF</c>, <c>Limey Whelps (PL86569)</c>. Allowed: letters, digits and
+    /// <c>space - _ . ( ) '</c>, 1..<see cref="MaxLeagueNameLength"/> characters. Control characters
+    /// and <c>:</c> are rejected so the value can also be used as a flat Redis key part
+    /// (tech doc, section 3).
     /// </summary>
     public static bool TryValidateLeagueName(string? league, out string? error)
     {
@@ -55,13 +59,25 @@ public static class ApiInputValidator
             error = $"League name is required and must be at most {MaxLeagueNameLength} characters (e.g. 'Standard').";
             return false;
         }
-        if (league.Any(c => !char.IsLetterOrDigit(c)))
+        if (league.Any(c => !IsAllowedLeagueCharacter(c)))
         {
-            error = "League name must be alphanumeric (e.g. 'Standard').";
+            error = "League name may only contain letters, digits and space - _ . ( ) ' (e.g. 'Standard', 'Solo Self-Found').";
             return false;
         }
         return true;
     }
+
+    /// <summary>
+    /// Validates a client-supplied item name (a stash item's <c>name</c>/<c>base_type</c>) used by the
+    /// catalogue lookup. Punctuation is allowed because <see cref="ItemNameNormalizer.Normalize"/>
+    /// discards it before anything is compared.
+    /// </summary>
+    public static bool TryValidateItemName(string? name, out string? error) =>
+        ItemNameNormalizer.TryValidateItemName(name, out error);
+
+    private static bool IsAllowedLeagueCharacter(char c) =>
+        char.IsLetterOrDigit(c) || c is ' ' or '-' or '_' or '.' or '(' or ')' or '\'';
+
 
     /// <summary>
     /// Parses a history range: <c>24h</c>, <c>7d</c> or <c>30d</c> (case-insensitive).

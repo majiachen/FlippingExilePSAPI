@@ -12,7 +12,7 @@ public class RedisStashCacheTests
     private readonly RedisStashCache _cache;
 
     private static StashEntry Entry() =>
-        new(Array.Empty<StashItem>(), new DateTimeOffset(2026, 9, 27, 8, 0, 0, TimeSpan.Zero), 3);
+        new(Array.Empty<StashItem>(), new DateTimeOffset(2026, 9, 27, 8, 0, 0, TimeSpan.Zero), "Standard");
 
     public RedisStashCacheTests()
     {

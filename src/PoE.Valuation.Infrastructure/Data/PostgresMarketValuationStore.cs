@@ -107,14 +107,17 @@ public sealed class PostgresMarketValuationStore : IMarketValuationStore
             return null;
         }
 
+        var (lowestRate, highestRate) = ValuationRate.ReferencePerItemRange(
+            digest.LowestRatio, digest.HighestRatio, itemId, reference);
+
         return new ValuationPoint(
             row.MarketId,
             // Npgsql materializes a `timestamptz` column as System.DateTime (Kind=Utc), never as
             // DateTimeOffset, so Dapper can only materialize SnapshotRow when the record declares
             // DateTime. The instant is converted back here.
             ToUtcOffset(row.SnapshotHourUtc),
-            ValuationRate.ReferencePerItem(digest.LowestRatio, itemId, reference),
-            ValuationRate.ReferencePerItem(digest.HighestRatio, itemId, reference),
+            lowestRate,
+            highestRate,
             digest.VolumeTraded.TryGetValue(itemId, out var itemVolume) ? itemVolume : null,
             digest.VolumeTraded.TryGetValue(reference, out var referenceVolume) ? referenceVolume : null);
     }

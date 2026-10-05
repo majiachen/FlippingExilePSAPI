@@ -5,9 +5,11 @@ using PoE.Valuation.Infrastructure.Clients;
 namespace PoE.Valuation.Infrastructure.Services;
 
 /// <summary>
-/// Resolves a league <em>name</em> (the representation the DB and the public API use) to the
-/// numeric league <em>id</em> the PoE stash endpoint requires. The <c>GET /leagues</c> lookup is
-/// cached in Redis under <c>league:{name}</c> for 24 hours so steady state costs one Redis read
+/// Resolves a league <em>name</em> (the representation the DB and the public API use) to the league
+/// <em>id</em> the PoE stash endpoint requires. PoE publishes the id as the league name itself
+/// (<c>"id": "Standard"</c>), so the mapping is usually the identity — but it is still resolved
+/// through <c>GET /leagues</c> so an unknown league is a 400 rather than a 404 from PoE. The lookup
+/// is cached in Redis under <c>league:{name}</c> for 24 hours so steady state costs one Redis read
 /// per cache miss rather than a PoE API call.
 /// </summary>
 public sealed class LeagueIdResolver
@@ -27,31 +29,34 @@ public sealed class LeagueIdResolver
     }
 
     /// <summary>
-    /// Returns the numeric league id for <paramref name="leagueName"/>, or null when the league is
-    /// unknown. Throws <see cref="RedisConnectionException"/> when Redis is down (→ 503) and
+    /// Returns the league id for <paramref name="leagueName"/>, or null when the league is unknown.
+    /// Throws <see cref="RedisConnectionException"/> when Redis is down (→ 503) and
     /// <see cref="HttpRequestException"/>/JSON errors when the PoE API is unreachable (→ 502).
     /// </summary>
-    public async Task<int?> ResolveAsync(string leagueName, CancellationToken ct = default)
+    public async Task<string?> ResolveAsync(string leagueName, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(leagueName);
+
         var key = RedisKeys.LeagueMapping(leagueName);
-        var cached = await _redis.GetAsync<int?>(key, ct);
-        if (cached is { } cachedId)
+        if (await _redis.GetAsync<string>(key, ct) is { Length: > 0 } cachedId)
         {
             return cachedId;
         }
 
         var leagues = await _poeClient.GetLeaguesAsync(ct);
         var leagueId = leagues
-            .FirstOrDefault(l => string.Equals(l.Name, leagueName, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(l => string.Equals(l.Name, leagueName, StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(l.Id, leagueName, StringComparison.OrdinalIgnoreCase))
             ?.Id;
 
-        if (leagueId is null)
+        if (string.IsNullOrWhiteSpace(leagueId))
         {
             _logger.LogDebug("League {LeagueName} not found in the PoE league list.", leagueName);
             return null;
         }
 
-        await _redis.SetAsync(key, leagueId.Value, LeagueCacheTtl, ct);
+        await _redis.SetAsync(key, leagueId, LeagueCacheTtl, ct);
         return leagueId;
     }
 }
+

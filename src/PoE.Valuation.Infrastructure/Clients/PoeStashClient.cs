@@ -30,10 +30,18 @@ public sealed class PoeStashClient
                ?? new List<LeagueInfo>();
     }
 
-    /// <summary>Fetches all items in the account's stash tabs for the league; the caller's access token is sent as Bearer.</summary>
-    public async Task<IReadOnlyList<StashApiItem>> GetStashAsync(int leagueId, string accessToken, CancellationToken ct = default)
+    /// <summary>
+    /// Fetches all items in the account's stash tabs for the league; the caller's access token is
+    /// sent as Bearer. <paramref name="leagueId"/> is escaped into the path segment because league
+    /// ids contain spaces and parentheses (<c>Solo Self-Found</c>).
+    /// </summary>
+    public async Task<IReadOnlyList<StashApiItem>> GetStashAsync(string leagueId, string accessToken, CancellationToken ct = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"stash/{leagueId}");
+        ArgumentException.ThrowIfNullOrWhiteSpace(leagueId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"stash/{Uri.EscapeDataString(leagueId)}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         using var response = await _http.SendAsync(request, ct);
@@ -44,12 +52,18 @@ public sealed class PoeStashClient
     }
 }
 
-/// <summary>One entry of the PoE <c>GET /leagues</c> response.</summary>
-/// <param name="Id">Numeric league id (required by <c>GET /stash/{leagueId}</c>).</param>
+/// <summary>
+/// One entry of the PoE <c>GET /leagues</c> response.
+/// </summary>
+/// <param name="Id">
+/// League id, which PoE publishes as the league name itself (<c>"id": "Standard"</c>,
+/// <c>"id": "Solo Self-Found"</c>) — not a number. It is what <c>GET /stash/{leagueId}</c> takes.
+/// </param>
 /// <param name="Name">League name as used in the DB and the public API (e.g. <c>Standard</c>).</param>
 public sealed record LeagueInfo(
-    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("name")] string Name);
+
 
 /// <summary>
 /// One item of the PoE <c>GET /stash/{leagueId}</c> response (subset the stash endpoint exposes;

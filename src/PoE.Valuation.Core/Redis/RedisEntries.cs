@@ -18,7 +18,9 @@ public sealed record SessionEntry(
 public sealed record StashEntry(
     IReadOnlyList<StashItem> Items,
     DateTimeOffset LastRefreshedAt,
-    int LeagueId);
+    /// <summary>PoE league id the stash was fetched for — the league name itself (e.g. <c>Solo Self-Found</c>).</summary>
+    string LeagueId);
+
 
 /// <summary>
 /// A cached projection of one public stash item — only the fields the valuation logic needs,

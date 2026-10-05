@@ -5,8 +5,16 @@ public sealed class PoEApiOptions
 {
     public const string SectionName = "PathOfExile";
 
-    /// <summary>Base URL of the authenticated PoE API (stash endpoints).</summary>
+    /// <summary>Base URL of the authenticated PoE API (league list + stash endpoints).</summary>
     public string ApiBaseUrl { get; init; } = "https://api.pathofexile.com";
+
+    /// <summary>
+    /// Base URL of the public trade data endpoints. <c>GET {TradeDataBaseUrl}static</c> returns the
+    /// item catalogue used to map an item name to the metadata path the snapshots are keyed by.
+    /// Must end with a slash so the relative request URI resolves against it.
+    /// </summary>
+    public string TradeDataBaseUrl { get; init; } = "https://www.pathofexile.com/api/trade/data/";
+
 
     /// <summary>
     /// Base URL of the public currency-exchange endpoint. Requests are made to

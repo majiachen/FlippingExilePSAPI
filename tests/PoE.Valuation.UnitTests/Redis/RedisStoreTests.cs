@@ -61,9 +61,9 @@ public class RedisStoreTests
                 new StashItem("i-1", "Standard", "Sword", "Sword", 3, 83, null, null, null, Corrupted: true, Verified: false, Note: null)
             },
             lastRefreshedAt,
-            LeagueId: 3);
+            LeagueId: "Solo Self-Found");
         var expectedJson =
-            """{"items":[{"itemId":"i-1","league":"Standard","name":"Sword","baseType":"Sword","frameType":3,"itemLevel":83,"corrupted":true,"verified":false}],"lastRefreshedAt":"2026-09-27T08:30:00+00:00","leagueId":3}""";
+            """{"items":[{"itemId":"i-1","league":"Standard","name":"Sword","baseType":"Sword","frameType":3,"itemLevel":83,"corrupted":true,"verified":false}],"lastRefreshedAt":"2026-09-27T08:30:00+00:00","leagueId":"Solo Self-Found"}""";
 
         _db.Setup(d => d.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
